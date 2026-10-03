@@ -88,6 +88,8 @@ function useHash() {
       if (!document.startViewTransition) return void update()
       document.documentElement.dataset.nav = entering ? 'play' : leaving ? 'leave' : 'page'
       const vt = document.startViewTransition(update)
+      // a transition that gets cut short (another navigation, a resize) still lands on the new page
+      vt.ready.catch(() => undefined)
       const start = from
       from = null
       if (entering && start) {
