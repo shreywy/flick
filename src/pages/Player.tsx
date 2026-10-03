@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PlayInfo, SubStyle, SubTrack } from '../../shared/types'
 import { api, type SpriteInfo } from '../api'
-import { afterNav, go, useApp } from '../App'
+import { go, toggleFullscreen, useApp, useFullscreen } from '../App'
 import CaptionsMenu from '../CaptionsMenu'
 import { MseFeeder } from '../mse'
 import { Back, Fullscreen, Gear, Next, Pause, Play, Skip, Spinner, Volume } from '../icons'
@@ -12,13 +12,11 @@ type ZoomMode = 'fit' | 'fill' | 'zoom'
 const RATES = [1, 1.25, 1.5, 2, 0.75]
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
 
-/** Leave the player. Fullscreen ends first, so the way back animates in a window that isn't changing size. */
+// set by the open player: saves progress and reloads the library, so the page we return to is already final
+let beforeLeave: (() => Promise<unknown>) | null = null
+
 async function leave() {
-  const resized = new Promise((r) => {
-    addEventListener('resize', r, { once: true })
-    setTimeout(r, 350)
-  })
-  if (await api.setFullscreen(false)) await resized
+  await beforeLeave?.().catch(() => undefined)
   if (history.length > 1) history.back()
   else go('#/')
 }
@@ -58,7 +56,7 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
   const [muted, setMuted] = useState(false)
   const [rate, setRate] = useState(1)
   const [sprite, setSprite] = useState<SpriteInfo | null>(null)
-  const [isFs, setIsFs] = useState(true)
+  const isFs = useFullscreen()
   const [zoomMode, setZoomMode] = useState<ZoomMode>(
     () => (localStorage.getItem(`flick.zoomMode.${fileId}`) ?? localStorage.getItem('flick.zoomMode') ?? 'fill') as ZoomMode,
   )
@@ -167,7 +165,6 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
 
   useEffect(() => {
     let alive = true
-    afterNav(() => alive && api.setFullscreen(true))
     api
       .playInfo(fileId)
       .then((i) => {
@@ -189,7 +186,6 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
     return () => {
       alive = false
       feeder.current?.destroy()
-      api.setFullscreen(false)
     }
   }, [fileId])
 
@@ -200,9 +196,22 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
   }, [info])
 
   // ---------- progress ----------
-  const save = useCallback(() => {
-    if (info && curRef.current > 1) api.saveProgress(fileId, curRef.current, info.duration)
-  }, [info, fileId])
+  const save = useCallback(
+    async () => {
+      if (info && curRef.current > 1) await api.saveProgress(fileId, curRef.current, info.duration)
+    },
+    [info, fileId],
+  )
+
+  useEffect(() => {
+    beforeLeave = async () => {
+      await save()
+      await refresh()
+    }
+    return () => {
+      beforeLeave = null
+    }
+  }, [save, refresh])
 
   useEffect(() => {
     const t = setInterval(() => playing && save(), 5000)
@@ -405,10 +414,6 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
         case 'ArrowDown':
           setVol((x) => clamp(Math.round((x - 0.05) * 100) / 100, 0, 1))
           break
-        case 'f':
-          api.setFullscreen(!isFs)
-          setIsFs(!isFs)
-          break
         case 'c':
           setMenu((m) => !m)
           break
@@ -439,7 +444,7 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
     }
     addEventListener('keydown', on)
     return () => removeEventListener('keydown', on)
-  }, [toggle, seek, settings.skipSeconds, isFs, delay, changeDelay, next, menu, poke, setZoom, zoomMode, zoomPct, view.scale])
+  }, [toggle, seek, settings.skipSeconds, delay, changeDelay, next, menu, poke, setZoom, zoomMode, zoomPct, view.scale])
 
   useEffect(() => {
     localStorage.setItem('flick.vol', String(vol))
@@ -466,6 +471,7 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
       onMouseMove={poke}
       onMouseDown={() => menu && setMenu(false)}
       data-testid="player"
+      data-title={title?.id}
     >
       <div className="p-stage">
       <video
@@ -499,8 +505,7 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
         }}
         onClick={() => !menu && toggle()}
         onDoubleClick={() => {
-          api.setFullscreen(!isFs)
-          setIsFs(!isFs)
+          toggleFullscreen()
         }}
       />
       {art && <img className={`p-art${framed ? ' gone' : ''}`} src={art} alt="" draggable={false} />}
@@ -650,8 +655,7 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
             className="ctl"
             aria-label={isFs ? 'Exit fullscreen' : 'Fullscreen'}
             onClick={() => {
-              api.setFullscreen(!isFs)
-              setIsFs(!isFs)
+              toggleFullscreen()
             }}
           >
             <Fullscreen exit={isFs} size={20} />

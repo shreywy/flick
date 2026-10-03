@@ -30,7 +30,7 @@ export default function Home() {
 
   return (
     <main className="page">
-      <section className="hero" data-file={heroFile}>
+      <section className="hero" data-file={heroFile} data-title={heroTitle.id}>
         <Img src={heroTitle.backdrop} className="hero-art" />
         <div className="hero-body">
           {heroTitle.logo ? (
@@ -73,6 +73,7 @@ export default function Home() {
               right={r.episode ? `${epTag(r.episode)}${r.progress ? ' · ' + timeLeft(r.progress) : ''}` : r.progress ? timeLeft(r.progress) : ''}
               progress={r.progress ? r.progress.position / r.progress.duration : undefined}
               fileId={r.fileId}
+              titleId={r.title.id}
               onClick={(el) => play(r, el)}
             />
           ))}

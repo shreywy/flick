@@ -86,7 +86,7 @@ function MoviePage({ t }: { t: Title }) {
   return (
     <main className="page">
       <BackButton />
-      <section className="title-hero" data-file={t.fileId}>
+      <section className="title-hero" data-file={t.fileId} data-title={t.id}>
         <Img src={t.backdrop} className="hero-art" />
         <div className="title-body">
           {t.logo ? <Img src={t.logo} className="hero-logo" alt={t.name} /> : <h1 className={`hero-title${t.name.length > 18 ? ' long' : ''}`}>{t.name}</h1>}
@@ -172,7 +172,7 @@ function ShowPage({ t, season }: { t: Title; season?: number }) {
   return (
     <main className="page">
       <BackButton />
-      <section className="title-hero show">
+      <section className="title-hero show" data-title={t.id}>
         <Img src={t.backdrop} className="hero-art" />
         <div className="title-body">
           {t.logo ? <Img src={t.logo} className="hero-logo" alt={t.name} /> : <h1 className={`hero-title${t.name.length > 18 ? ' long' : ''}`}>{t.name}</h1>}

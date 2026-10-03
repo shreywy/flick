@@ -27,12 +27,8 @@ export const useApp = () => useContext(AppCtx)
 
 // ---------- page transitions ----------
 // Every route change runs inside a view transition: the old page stays on screen until the new one has its
-// images ready, then they cross-fade. Playing something grows the clicked artwork into the player; leaving
-// the player shrinks it back into that card.
-
-let navDone: Promise<unknown> = Promise.resolve()
-/** Run fn once the current page transition has finished (resizing the window mid-transition cancels it). */
-export const afterNav = (fn: () => void) => void navDone.then(fn, fn)
+// images ready, then the new one comes in. Playing something flies the clicked artwork to the middle of the
+// screen and opens the player out of it; leaving the player runs the same flight backwards into that card.
 
 const scrolls = new Map<string, number>()
 let popped = false
@@ -49,13 +45,44 @@ export function play(fileId: number, el?: Element | null, startOver = false) {
   go(`#/play/${fileId}${startOver ? '/start' : ''}`)
 }
 
+const onScreen = (r: DOMRect) => r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth
+
 function imagesReady(ms: number) {
-  const imgs = [...document.images].filter((i) => {
-    const r = i.getBoundingClientRect()
-    return r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth
-  })
+  const imgs = [...document.images].filter((i) => onScreen(i.getBoundingClientRect()))
   for (const i of imgs) i.loading = 'eager'
   return Promise.race([Promise.all(imgs.map((i) => i.decode().catch(() => undefined))), new Promise((r) => setTimeout(r, ms))])
+}
+
+type Box = { x: number; y: number; w: number; h: number }
+const PLAY_MS = 820
+const LEAVE_MS = 720
+
+/** Card -> middle of the screen -> full screen (or the reverse), on the flick-play group. */
+function fly(card: DOMRect | null, dir: 'in' | 'out') {
+  const W = innerWidth
+  const H = innerHeight
+  const full: Box = { x: 0, y: 0, w: W, h: H }
+  const base: Box = card ? { x: card.left, y: card.top, w: card.width, h: card.height } : { x: 0, y: 0, w: W * 0.24, h: W * 0.135 }
+  const k = Math.min(1.6, (W * 0.42) / base.w)
+  const mid: Box = { w: base.w * k, h: base.h * k, x: (W - base.w * k) / 2, y: (H - base.h * k) / 2 }
+  // a target bigger than the middle stop (a banner) is reached directly, so it never shrinks and grows again
+  const direct = !!card && base.w >= mid.w
+  const path = direct ? (dir === 'in' ? [base, full] : [full, base]) : dir === 'in' ? [base, mid, full] : [full, mid, card ? base : mid]
+  const kf: Record<string, unknown> = {
+    transform: path.map((b) => `translate(${b.x}px, ${b.y}px)`),
+    width: path.map((b) => `${b.w}px`),
+    height: path.map((b) => `${b.h}px`),
+    borderRadius: direct ? ['0px', '0px'] : dir === 'in' ? ['6px', '8px', '0px'] : ['0px', '8px', '6px'],
+    offset: direct ? [0, 1] : [0, dir === 'in' ? 0.45 : 0.5, 1],
+    easing: direct ? ['cubic-bezier(.3,0,.1,1)', 'linear'] : dir === 'in' ? ['cubic-bezier(.3,0,.2,1)', 'cubic-bezier(.6,0,.15,1)', 'linear'] : ['cubic-bezier(.5,0,.1,1)', 'cubic-bezier(.4,0,.1,1)', 'linear'],
+  }
+  // nowhere to land: settle in the middle and fade
+  if (dir === 'out' && !card) kf.opacity = [1, 1, 0]
+  document.documentElement.animate(kf as unknown as Keyframe[], {
+    duration: dir === 'in' ? PLAY_MS : LEAVE_MS,
+    pseudoElement: '::view-transition-group(flick-play)',
+    fill: 'both',
+  })
 }
 
 function useHash() {
@@ -70,56 +97,40 @@ function useHash() {
       popped = false
       const leaving = prev.startsWith('#/play/') && !next.startsWith('#/play/')
       const entering = next.startsWith('#/play/') && !prev.startsWith('#/play/')
+      let to: DOMRect | null = null
+      const titleId = document.querySelector<HTMLElement>('.player')?.dataset.title
       const update = async () => {
         flushSync(() => setHash(next))
         scrollTo(0, back ? (scrolls.get(next) ?? 0) : 0)
         if (leaving) {
-          // shrink back into the card for what was playing, when it's on screen
+          // land back on the card for what was playing, or failing that one for the same show, when it's on screen
           const id = prev.split('/')[2]
-          const card = [...document.querySelectorAll(`[data-file="${id}"]`)].find((c) => {
-            const r = c.getBoundingClientRect()
-            return r.bottom > 0 && r.top < innerHeight
-          })
-          const img = card?.querySelector('img') ?? card
-          if (img instanceof HTMLElement) img.style.viewTransitionName = 'flick-play'
+          const banner = (c: Element) => (c.matches('.hero, .title-hero') ? 1 : 0)
+          const cards = [...document.querySelectorAll(`[data-file="${id}"]`), ...(titleId ? document.querySelectorAll(`[data-title="${titleId}"]`) : [])]
+          // a card first, the page's big banner only when there's no card
+          cards.sort((a, b) => banner(a) - banner(b))
+          for (const c of cards) {
+            const img = c.querySelector('img') ?? c
+            const r = img.getBoundingClientRect()
+            if (img instanceof HTMLElement && onScreen(r)) {
+              img.style.viewTransitionName = 'flick-play'
+              to = r
+              break
+            }
+          }
         }
         await imagesReady(400)
       }
       if (!document.startViewTransition) return void update()
-      document.documentElement.dataset.nav = entering ? 'play' : leaving ? 'leave' : 'page'
+      document.documentElement.dataset.nav = entering ? (from ? 'play' : 'page') : leaving ? 'leave' : 'page'
       const vt = document.startViewTransition(update)
-      // a transition that gets cut short (another navigation, a resize) still lands on the new page
-      vt.ready.catch(() => undefined)
       const start = from
       from = null
-      if (entering && start) {
-        // the card first moves to the middle of the screen, then the player opens out from it
-        vt.ready
-          .then(() => {
-            const W = innerWidth
-            const H = innerHeight
-            const k = Math.min(1.6, (W * 0.42) / start.width)
-            const w = start.width * k
-            const h = start.height * k
-            document.documentElement.animate(
-              {
-                transform: [`translate(${start.left}px, ${start.top}px)`, `translate(${(W - w) / 2}px, ${(H - h) / 2}px)`, 'translate(0px, 0px)'],
-                width: [`${start.width}px`, `${w}px`, `${W}px`],
-                height: [`${start.height}px`, `${h}px`, `${H}px`],
-                borderRadius: ['6px', '8px', '0px'],
-                offset: [0, 0.45, 1],
-                easing: ['cubic-bezier(.3,0,.2,1)', 'cubic-bezier(.6,0,.15,1)', 'linear'],
-              } as unknown as Keyframe[],
-              { duration: 820, pseudoElement: '::view-transition-group(flick-play)', fill: 'both' },
-            )
-          })
-          .catch(() => undefined)
-      }
-      navDone = vt.finished.finally(() => {
+      // a transition that gets cut short (another navigation, a resize) still lands on the new page
+      vt.ready.then(() => (entering && start ? fly(start, 'in') : leaving ? fly(to, 'out') : undefined)).catch(() => undefined)
+      vt.finished.finally(() => {
         delete document.documentElement.dataset.nav
-        document.querySelectorAll<HTMLElement>('[style*="view-transition-name"]').forEach((el) => {
-          if (!el.classList.contains('p-stage')) el.style.viewTransitionName = ''
-        })
+        document.querySelectorAll<HTMLElement>('[style*="view-transition-name"]').forEach((el) => (el.style.viewTransitionName = ''))
       })
     }
     addEventListener('popstate', onPop)
@@ -132,19 +143,33 @@ function useHash() {
   return hash
 }
 
+// ---------- fullscreen ----------
+/** Whether the window is fullscreen, kept in sync with the main process. */
+export function useFullscreen() {
+  const [fs, setFs] = useState(false)
+  useEffect(() => {
+    api.windowState().then((s) => setFs(s.fullscreen))
+    return api.on('window:fullscreen', (on) => setFs(on as boolean))
+  }, [])
+  return fs
+}
+
+export const toggleFullscreen = () => api.windowState().then((s) => api.setFullscreen(!s.fullscreen))
+
 export function go(hash: string) {
   if (location.hash !== hash) location.hash = hash
 }
 
 // ---------- window buttons ----------
 function WindowControls() {
+  const fs = useFullscreen()
   const [max, setMax] = useState(true)
   useEffect(() => {
     api.windowState().then((s) => setMax(s.maximized))
     return api.on('window:maximized', (m) => setMax(m as boolean))
   }, [])
   return (
-    <div className="wctl">
+    <div className={`wctl${fs ? ' fs' : ''}`}>
       <button aria-label="Minimise" onClick={() => api.minimize()}>
         <svg viewBox="0 0 10 10" aria-hidden>
           <path d="M0 5h10" />
@@ -185,6 +210,19 @@ export default function App() {
     return () => offs.forEach((o) => o())
   }, [refresh, loadQueue])
 
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.altKey || e.metaKey || e.repeat) return
+      if ((e.target as HTMLElement).closest?.('input, textarea, select') || location.hash.startsWith('#/search')) return
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault()
+        toggleFullscreen()
+      } else if (e.key === 'Escape' && !location.hash.startsWith('#/play/')) api.setFullscreen(false)
+    }
+    addEventListener('keydown', on)
+    return () => removeEventListener('keydown', on)
+  }, [])
+
   const saveSettings = useCallback(async (p: Partial<AppSettings>) => setSettings(await api.setSettings(p)), [])
 
   const value = useMemo<Ctx | null>(() => {
@@ -224,7 +262,7 @@ export default function App() {
       <div className="dragbar" />
       {showHeader && <Header route={route || ''} />}
       {page}
-      <WindowControls />
+      {route !== 'play' && <WindowControls />}
     </AppCtx.Provider>
   )
 }
@@ -247,12 +285,15 @@ function Header({ route }: { route: string }) {
       <nav className="nav">
         <button className={!route ? 'on' : ''} onClick={() => go('#/')}>
           Home
+          {!route && <span className="nav-ind" />}
         </button>
         <button className={route === 'movies' ? 'on' : ''} onClick={() => go('#/movies')}>
           Movies
+          {route === 'movies' && <span className="nav-ind" />}
         </button>
         <button className={route === 'shows' ? 'on' : ''} onClick={() => go('#/shows')}>
           Shows
+          {route === 'shows' && <span className="nav-ind" />}
         </button>
       </nav>
       <div className="spacer" />

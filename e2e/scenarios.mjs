@@ -274,9 +274,28 @@ export async function flow(ctx) {
   }
   await page.locator('.upnext button', { hasText: 'Cancel' }).click().catch(() => {})
   await page.keyboard.press('Escape')
-  await sleep(250)
-  await shot('leave-mid')
+  // freeze the flight part way through to look at it
+  await page.waitForFunction(() => document.getAnimations().some((a) => a.effect?.pseudoElement === '::view-transition-group(flick-play)' && a.effect.getKeyframes().length === 3), null, { timeout: 8000 })
+  for (const f of [0.25, 0.5, 0.75]) {
+    const t = await page.evaluate((f) => {
+      const all = document.getAnimations()
+      for (const a of all) {
+        a.pause()
+        a.currentTime = f * 720
+      }
+      return all.length
+    }, f)
+    await shot(`leave-${f * 100}`)
+    log('frozen', f, 'animations', t)
+  }
+  await page.evaluate(() => document.getAnimations().forEach((a) => a.play()))
   await sleep(1500)
   await shot('back-home')
+  await page.mouse.move(1700, 1100)
+  await sleep(500)
+  await shot('row-hover')
+  await page.mouse.wheel(0, 500)
+  await sleep(700)
+  await shot('scrolled-header')
   log('hash', await page.evaluate(() => location.hash))
 }

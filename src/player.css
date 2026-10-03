@@ -46,6 +46,7 @@
 .player.ui .p-bottom {
   opacity: 1;
   pointer-events: auto;
+  transform: none;
 }
 .p-top {
   position: absolute;
@@ -56,7 +57,8 @@
   gap: 0.7rem;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s;
+  transform: translateY(-6px);
+  transition: opacity 0.22s, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .p-top .t {
   font-size: 1rem;
@@ -76,7 +78,8 @@
   gap: 0.45rem;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s;
+  transform: translateY(8px);
+  transition: opacity 0.22s, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .ctl {
   width: 2.3rem;
@@ -271,6 +274,14 @@
   gap: 0.1rem;
   cursor: default;
   z-index: 5;
+  transform-origin: 90% 100%;
+  animation: menu-pop 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes menu-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
 }
 .menu-tabs {
   display: flex;
@@ -543,6 +554,13 @@
   gap: 0.75rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
   cursor: default;
+  animation: slide-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
 }
 .upnext img {
   width: 100%;
@@ -592,7 +610,13 @@
   z-index: 4;
   animation: vt-in 0.3s both;
 }
+.p-skip {
+  transition: background 0.15s, color 0.15s, transform 0.12s;
+}
 .p-skip:hover {
   background: var(--text);
   color: #111;
+}
+.p-skip:active {
+  transform: scale(0.96);
 }

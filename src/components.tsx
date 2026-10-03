@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Title } from '../shared/types'
 import { go, useApp } from './App'
 import { Check, Chevron } from './icons'
@@ -7,7 +7,14 @@ import { isStarted, isWatched } from './lib'
 export function Img({ src, alt = '', className, fallback }: { src?: string; alt?: string; className?: string; fallback?: ReactNode }) {
   const [bad, setBad] = useState(false)
   if (!src || bad) return <>{fallback ?? null}</>
-  return <img src={src} alt={alt} className={className} loading="lazy" decoding="async" draggable={false} onError={() => setBad(true)} />
+  return <img ref={fadeIn} src={src} alt={alt} className={className} loading="lazy" decoding="async" draggable={false} onError={() => setBad(true)} />
+}
+
+/** Images that still have to load fade in; ones already in memory show at once, so returning to a page doesn't flash. */
+function fadeIn(el: HTMLImageElement | null) {
+  if (!el || el.complete) return
+  el.classList.add('pending')
+  el.addEventListener('load', () => el.classList.remove('pending'), { once: true })
 }
 
 export function PosterCard({ t, sub, name }: { t: Title; sub?: string; name?: ReactNode }) {
@@ -15,7 +22,7 @@ export function PosterCard({ t, sub, name }: { t: Title; sub?: string; name?: Re
   const p = t.fileId ? lib.progress[t.fileId] : undefined
   const watched = isWatched(t, lib)
   return (
-    <button className="poster" onClick={() => go(`#/title/${t.id}`)} title={t.name}>
+    <button className="poster" data-title={t.id} onClick={() => go(`#/title/${t.id}`)} title={t.name}>
       <div className="poster-art">
         <Img src={t.poster} fallback={<div className="poster-fallback">{t.name}</div>} />
         {isStarted(p) && (
@@ -41,6 +48,7 @@ export function ThumbCard({
   right,
   progress,
   fileId,
+  titleId,
   onClick,
 }: {
   img?: string
@@ -48,10 +56,11 @@ export function ThumbCard({
   right?: string
   progress?: number
   fileId?: number
+  titleId?: number
   onClick: (el: HTMLElement) => void
 }) {
   return (
-    <button className="thumb" data-file={fileId} onClick={(e) => onClick(e.currentTarget)}>
+    <button className="thumb" data-file={fileId} data-title={titleId} onClick={(e) => onClick(e.currentTarget)}>
       <div className="thumb-art">
         <Img src={img} />
         {progress !== undefined && (
@@ -70,25 +79,49 @@ export function ThumbCard({
 
 export function Row({ title, children }: { title: string; children: ReactNode }) {
   const track = useRef<HTMLDivElement>(null)
+  const [edge, setEdge] = useState({ l: false, r: false })
+  // arrows only when there's more to see that way
+  const check = () => {
+    const t = track.current
+    if (!t) return
+    const l = t.scrollLeft > 4
+    const r = t.scrollLeft + t.clientWidth < t.scrollWidth - 4
+    setEdge((p) => (p.l === l && p.r === r ? p : { l, r }))
+  }
+  useEffect(check)
+  useEffect(() => {
+    const ro = new ResizeObserver(check)
+    ro.observe(track.current!)
+    return () => ro.disconnect()
+  }, [])
   const scroll = (dir: number) => track.current?.scrollBy({ left: dir * track.current.clientWidth * 0.8 })
   return (
-    <section className="row">
+    <section className={`row${edge.l ? ' more-l' : ''}${edge.r ? ' more-r' : ''}`}>
       <h2>{title}</h2>
-      <button className="row-arrow left" aria-label={`Scroll ${title} left`} onClick={() => scroll(-1)}>
-        <Chevron dir="left" size={28} />
-      </button>
+      {edge.l && (
+        <button className="row-arrow left" aria-label={`Scroll ${title} left`} onClick={() => scroll(-1)}>
+          <span>
+            <Chevron dir="left" size={24} />
+          </span>
+        </button>
+      )}
       <div
         className="row-track"
         ref={track}
+        onScroll={check}
         onWheel={(e) => {
           if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && e.shiftKey) track.current?.scrollBy({ left: e.deltaY })
         }}
       >
         {children}
       </div>
-      <button className="row-arrow right" aria-label={`Scroll ${title} right`} onClick={() => scroll(1)}>
-        <Chevron size={28} />
-      </button>
+      {edge.r && (
+        <button className="row-arrow right" aria-label={`Scroll ${title} right`} onClick={() => scroll(1)}>
+          <span>
+            <Chevron size={24} />
+          </span>
+        </button>
+      )}
     </section>
   )
 }
