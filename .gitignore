@@ -1,6 +1,7 @@
 node_modules/
 dist/
+dist-electron/
 release/
 out/
+e2e/out/
 *.log
-
