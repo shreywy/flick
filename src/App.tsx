@@ -33,15 +33,17 @@ export const useApp = () => useContext(AppCtx)
 const scrolls = new Map<string, number>()
 let popped = false
 let from: DOMRect | null = null
+let zoom = false
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
 
-/** Open the player, growing `el`'s artwork into it. */
+/** Open the player, growing `el`'s artwork into it. A banner-sized picture would just jump, so those zoom the page instead. */
 export function play(fileId: number, el?: Element | null, startOver = false) {
   const img = el?.querySelector('img') ?? el
-  if (img instanceof HTMLElement) {
+  const r = img?.getBoundingClientRect()
+  if (img instanceof HTMLElement && r && r.width < innerWidth * 0.4) {
     img.style.viewTransitionName = 'flick-play'
-    from = img.getBoundingClientRect()
-  }
+    from = r
+  } else zoom = true
   go(`#/play/${fileId}${startOver ? '/start' : ''}`)
 }
 
@@ -55,7 +57,7 @@ function imagesReady(ms: number) {
 
 type Box = { x: number; y: number; w: number; h: number }
 const PLAY_MS = 820
-const LEAVE_MS = 720
+const LEAVE_MS = 620
 
 /** Card -> middle of the screen -> full screen (or the reverse), on the flick-play group. */
 function fly(card: DOMRect | null, dir: 'in' | 'out') {
@@ -65,19 +67,18 @@ function fly(card: DOMRect | null, dir: 'in' | 'out') {
   const base: Box = card ? { x: card.left, y: card.top, w: card.width, h: card.height } : { x: 0, y: 0, w: W * 0.24, h: W * 0.135 }
   const k = Math.min(1.6, (W * 0.42) / base.w)
   const mid: Box = { w: base.w * k, h: base.h * k, x: (W - base.w * k) / 2, y: (H - base.h * k) / 2 }
-  // a target bigger than the middle stop (a banner) is reached directly, so it never shrinks and grows again
-  const direct = !!card && base.w >= mid.w
-  const path = direct ? (dir === 'in' ? [base, full] : [full, base]) : dir === 'in' ? [base, mid, full] : [full, mid, card ? base : mid]
+  // the way back is one continuous move into the card; with no card it settles in the middle and fades
+  const direct = dir === 'out' && !!card
+  const path = dir === 'in' ? [base, mid, full] : card ? [full, base] : [full, mid]
   const kf: Record<string, unknown> = {
     transform: path.map((b) => `translate(${b.x}px, ${b.y}px)`),
     width: path.map((b) => `${b.w}px`),
     height: path.map((b) => `${b.h}px`),
-    borderRadius: direct ? ['0px', '0px'] : dir === 'in' ? ['6px', '8px', '0px'] : ['0px', '8px', '6px'],
-    offset: direct ? [0, 1] : [0, dir === 'in' ? 0.45 : 0.5, 1],
-    easing: direct ? ['cubic-bezier(.3,0,.1,1)', 'linear'] : dir === 'in' ? ['cubic-bezier(.3,0,.2,1)', 'cubic-bezier(.6,0,.15,1)', 'linear'] : ['cubic-bezier(.5,0,.1,1)', 'cubic-bezier(.4,0,.1,1)', 'linear'],
+    borderRadius: dir === 'in' ? ['6px', '8px', '0px'] : ['0px', '6px'],
+    offset: dir === 'in' ? [0, 0.45, 1] : [0, 1],
+    easing: dir === 'in' ? ['cubic-bezier(.3,0,.2,1)', 'cubic-bezier(.6,0,.15,1)', 'linear'] : ['cubic-bezier(.32,0,.08,1)', 'linear'],
   }
-  // nowhere to land: settle in the middle and fade
-  if (dir === 'out' && !card) kf.opacity = [1, 1, 0]
+  if (!direct && dir === 'out') kf.opacity = [1, 0]
   document.documentElement.animate(kf as unknown as Keyframe[], {
     duration: dir === 'in' ? PLAY_MS : LEAVE_MS,
     pseudoElement: '::view-transition-group(flick-play)',
@@ -102,6 +103,8 @@ function useHash() {
       const update = async () => {
         flushSync(() => setHash(next))
         scrollTo(0, back ? (scrolls.get(next) ?? 0) : 0)
+        // let anything that depends on the scroll position (the top bar) settle before the new page shows
+        flushSync(() => dispatchEvent(new Event('scroll')))
         if (leaving) {
           // land back on the card for what was playing, or failing that one for the same show, when it's on screen
           const id = prev.split('/')[2]
@@ -122,7 +125,11 @@ function useHash() {
         await imagesReady(400)
       }
       if (!document.startViewTransition) return void update()
-      document.documentElement.dataset.nav = entering ? (from ? 'play' : 'page') : leaving ? 'leave' : 'page'
+      document.documentElement.dataset.nav = entering ? (from ? 'play' : zoom ? 'zoom' : 'page') : leaving ? 'leave' : 'page'
+      zoom = false
+      // the top bar stays put only when both pages have it; otherwise it goes with the page it belongs to
+      const bar = (h: string) => !/^#\/(play|title)\//.test(h)
+      document.documentElement.dataset.bar = bar(prev) && bar(next) ? 'keep' : ''
       const vt = document.startViewTransition(update)
       const start = from
       from = null
@@ -269,7 +276,7 @@ export default function App() {
 
 function Header({ route }: { route: string }) {
   const { queue } = useApp()
-  const [solid, setSolid] = useState(false)
+  const [solid, setSolid] = useState(() => scrollY > 40)
   useEffect(() => {
     const on = () => setSolid(scrollY > 40)
     on()

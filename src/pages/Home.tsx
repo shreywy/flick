@@ -43,7 +43,13 @@ export default function Home() {
           <div className="actions">
             <button
               className="btn primary"
-              onClick={(e) => (heroFile ? playFile(heroFile, e.currentTarget.closest('.hero')) : go(`#/title/${heroTitle.id}`))}
+              onClick={(e) => {
+                if (!heroFile) return go(`#/title/${heroTitle.id}`)
+                // resuming: it's in Continue watching, so fly from that card when it's on screen
+                const card = document.querySelector(`.thumb[data-file="${heroFile}"]`)
+                const r = card?.getBoundingClientRect()
+                playFile(heroFile, r && r.top < innerHeight && r.bottom > 0 && r.left < innerWidth ? card : e.currentTarget.closest('.hero'))
+              }}
             >
               <Play />
               {lead?.progress ? 'Resume' : 'Play'}

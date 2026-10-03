@@ -94,7 +94,40 @@ export function Row({ title, children }: { title: string; children: ReactNode })
     ro.observe(track.current!)
     return () => ro.disconnect()
   }, [])
-  const scroll = (dir: number) => track.current?.scrollBy({ left: dir * track.current.clientWidth * 0.8 })
+
+  // one eased scroller: shift + wheel and the arrows both move a target, the track glides to it
+  const glide = useRef<(by: number) => void>(() => undefined)
+  useEffect(() => {
+    const t = track.current!
+    let target = 0
+    let raf = 0
+    const step = () => {
+      const d = target - t.scrollLeft
+      if (Math.abs(d) < 0.5) {
+        t.scrollLeft = target
+        raf = 0
+        return
+      }
+      t.scrollLeft += d * 0.2
+      raf = requestAnimationFrame(step)
+    }
+    glide.current = (by) => {
+      if (!raf) target = t.scrollLeft
+      target = Math.max(0, Math.min(t.scrollWidth - t.clientWidth, target + by))
+      if (!raf) raf = requestAnimationFrame(step)
+    }
+    const wheel = (e: WheelEvent) => {
+      if (!e.shiftKey) return
+      e.preventDefault()
+      glide.current((e.deltaY || e.deltaX) * 3)
+    }
+    t.addEventListener('wheel', wheel, { passive: false })
+    return () => {
+      t.removeEventListener('wheel', wheel)
+      cancelAnimationFrame(raf)
+    }
+  }, [])
+  const scroll = (dir: number) => glide.current(dir * track.current!.clientWidth * 0.8)
   return (
     <section className={`row${edge.l ? ' more-l' : ''}${edge.r ? ' more-r' : ''}`}>
       <h2>{title}</h2>
@@ -109,9 +142,6 @@ export function Row({ title, children }: { title: string; children: ReactNode })
         className="row-track"
         ref={track}
         onScroll={check}
-        onWheel={(e) => {
-          if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && e.shiftKey) track.current?.scrollBy({ left: e.deltaY })
-        }}
       >
         {children}
       </div>

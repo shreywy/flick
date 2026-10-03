@@ -299,3 +299,75 @@ export async function flow(ctx) {
   await shot('scrolled-header')
   log('hash', await page.evaluate(() => location.hash))
 }
+
+// Motion checks: Resume from the banner, the way back, opening a film's page, shift + wheel on a row, Play from a banner.
+export async function motion(ctx) {
+  const { page, shot, sleep, log } = ctx
+  await page.locator('.header').waitFor({ timeout: 30000 })
+  await sleep(1500)
+  const freeze = async (label, ms, fracs) => {
+    for (const f of fracs) {
+      await page.evaluate((t) => document.getAnimations().forEach((a) => (a.pause(), (a.currentTime = t))), f * ms)
+      await shot(`${label}-${Math.round(f * 100)}`)
+    }
+    await page.evaluate(() => document.getAnimations().forEach((a) => a.play()))
+  }
+  const waitNav = (kind) => page.waitForFunction((k) => document.documentElement.dataset.nav === k && document.getAnimations().length > 0, kind, { timeout: 8000 })
+
+  await page.getByRole('button', { name: /^(Resume|Play)$/ }).first().click()
+  await waitNav('play')
+  log('resume nav', await page.evaluate(() => document.documentElement.dataset.nav))
+  await freeze('resume', 820, [0.2, 0.45])
+  await sleep(2500)
+  await page.keyboard.press('Escape')
+  await waitNav('leave')
+  await freeze('back', 620, [0.3, 0.6, 0.85])
+  await sleep(1500)
+  await shot('home')
+
+  // shift + wheel on the second row (dispatched directly: the test window's own wheel can't reach rows below its fold)
+  const moved = await page.locator('.row-track').nth(1).evaluate(async (t) => {
+    const a = t.scrollLeft
+    for (let i = 0; i < 3; i++) t.dispatchEvent(new WheelEvent('wheel', { deltaY: 100, shiftKey: true, cancelable: true, bubbles: true }))
+    await new Promise((r) => setTimeout(r, 400))
+    return t.scrollLeft - a
+  })
+  log('shift wheel x3 moved', moved, 'px in 400ms')
+
+  // a film's page
+  await page.evaluate(() => scrollTo(0, 0))
+  await page.locator('.poster', { hasText: 'Your Name' }).first().click()
+  await waitNav('page')
+  await freeze('to-title', 320, [0.15, 0.5])
+  await sleep(1200)
+  await shot('title-page')
+  await page.getByRole('button', { name: 'Play', exact: true }).click()
+  await waitNav('zoom')
+  await freeze('zoom', 540, [0.3, 0.7])
+  await sleep(1500)
+  await page.keyboard.press('Escape')
+  await sleep(1500)
+}
+
+export async function zoomplay(ctx) {
+  const { page, shot, sleep, log } = ctx
+  await page.locator('.header').waitFor({ timeout: 30000 })
+  const lib = await page.evaluate(() => window.flick.invoke('library:get'))
+  const t = lib.titles.find((x) => x.name.startsWith('Your Name'))
+  await page.evaluate((id) => (location.hash = `#/title/${id}`), t.id)
+  await sleep(1500)
+  await page.getByRole('button', { name: 'Play', exact: true }).click()
+  await page.waitForFunction(() => document.getAnimations().some((a) => String(a.effect?.pseudoElement ?? '').startsWith('::view-transition')), null, { timeout: 8000 })
+  log('nav', await page.evaluate(() => document.documentElement.dataset.nav))
+  log('named', await page.evaluate(() => [...document.querySelectorAll('*')].filter((e) => getComputedStyle(e).viewTransitionName !== 'none').map((e) => e.className + ':' + getComputedStyle(e).viewTransitionName)))
+  for (const f of [0.3, 0.7]) {
+    await page.evaluate((ms) => document.getAnimations().forEach((a) => String(a.effect?.pseudoElement ?? '').startsWith('::view-transition') && (a.pause(), (a.currentTime = ms))), f * 540)
+    await shot(`zoom-${f * 100}`)
+  }
+  await page.evaluate(() => document.getAnimations().forEach((a) => a.play()))
+  await sleep(1500)
+  await shot('player')
+  await page.keyboard.press('Escape')
+  await sleep(1500)
+  await shot('back-title')
+}
