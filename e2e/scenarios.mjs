@@ -123,7 +123,7 @@ export async function play(ctx) {
   await sleep(700)
   await shot('seek-hover')
   // captions menu
-  await page.getByRole('button', { name: 'Subtitles and audio' }).click()
+  await page.getByRole('button', { name: 'Player settings' }).click()
   await sleep(400)
   await shot('captions-menu')
   await page.getByText('Style and timing').click()
@@ -222,4 +222,61 @@ export async function frames(ctx) {
     const ct = await page.locator('video').evaluate((v) => v.currentTime.toFixed(2))
     await shot(`t${ct}`)
   }
+}
+
+// Continue watching opens paused, the card grows into the player, back shrinks it, skip intro / credits on a show.
+export async function flow(ctx) {
+  const { page, shot, sleep, log } = ctx
+  await page.locator('.header').waitFor({ timeout: 30000 })
+  log('window buttons', await page.locator('.wctl button').count())
+  const lib = await page.evaluate(() => window.flick.invoke('library:get'))
+  const show = lib.titles.find((x) => x.name.includes('Mandalorian'))
+  const ep = show.episodes.find((e) => e.season === 2 && e.episode === 2)
+  // give it some progress so it's in Continue watching
+  await page.evaluate((id) => window.flick.invoke('progress:save', id, 600, 2000), ep.fileId)
+  await page.evaluate(() => window.flick.invoke('library:rescan')).catch(() => {})
+  await page.evaluate(() => (location.hash = '#/movies'))
+  await sleep(600)
+  await page.evaluate(() => (location.hash = '#/'))
+  await sleep(1500)
+  const card = page.locator('.thumb', { hasText: 'Mandalorian' })
+  await card.waitFor({ timeout: 10000 })
+  const fid = Number(await card.getAttribute('data-file'))
+  const resumeAt = (await page.evaluate(() => window.flick.invoke('library:get'))).progress[fid]?.position ?? 0
+  log('card file', fid, 'resume at', resumeAt)
+  await card.click()
+  await sleep(250)
+  await shot('enter-mid')
+  await sleep(2500)
+  const v = page.locator('video')
+  const st = await v.evaluate((el) => ({ t: el.currentTime, paused: el.paused }))
+  log('resume state', JSON.stringify(st))
+  if (resumeAt >= 5 ? !st.paused || Math.abs(st.t - (resumeAt - 3)) > 2 : st.paused) throw new Error('resume should open paused, a fresh start should play')
+  await shot('resumed-paused')
+  const marks = await page.evaluate((id) => window.flick.invoke('play:markers', id), fid)
+  log('markers', JSON.stringify(marks))
+  if (marks.intro) {
+    await page.evaluate((t) => window.__flickSeek(t), marks.intro[0] + 1)
+    await page.getByRole('button', { name: 'Skip intro' }).waitFor({ timeout: 8000 })
+    await sleep(2500)
+    await shot('skip-intro')
+    await page.getByRole('button', { name: 'Skip intro' }).click()
+    await sleep(1500)
+    log('after skip intro', await page.getByRole('slider', { name: 'Seek' }).getAttribute('aria-valuenow'))
+  }
+  if (marks.credits) {
+    await page.evaluate((t) => window.__flickSeek(t), marks.credits + 2)
+    await page.locator('.upnext').waitFor({ timeout: 8000 })
+    log('upnext', await page.locator('.upnext').innerText())
+    await sleep(3000)
+    await shot('credits-upnext')
+    log('still there', await page.locator('.upnext').count(), 'video t', await v.evaluate((el) => el.currentTime))
+  }
+  await page.locator('.upnext button', { hasText: 'Cancel' }).click().catch(() => {})
+  await page.keyboard.press('Escape')
+  await sleep(250)
+  await shot('leave-mid')
+  await sleep(1500)
+  await shot('back-home')
+  log('hash', await page.evaluate(() => location.hash))
 }

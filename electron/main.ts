@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { DEFAULT_SUB_STYLE, type PlayInfo, type Settings, type SubTrack } from '../shared/types'
-import { getSetting, openDb, setSetting, type DB } from './db'
+import { getSetting, noteSub, openDb, setSetting, subRelease, type DB } from './db'
 import { buildLibrary, fileRow, progressKey, scanLibrary } from './library'
 import { readMeta } from './metadata'
 import { sidecarLang } from './parse'
@@ -11,6 +11,7 @@ import { audioTracks, choosePlan, details, detectCrop, streamMime, keyframeBefor
 import { downloadBestSub, Queue, type SubProvider } from './queue'
 import { MediaServer } from './server'
 import { decodeSub, guessExt, openSubtitlesHash, OpenSubtitles, QuotaError, rank, saveSub, SubDL, type SubCandidate, type SubQuery } from './subtitles'
+import { MarkerFinder } from './markers'
 import { Tmdb } from './tmdb'
 
 app.setName('Flick')
@@ -33,6 +34,7 @@ let db: DB
 let win: BrowserWindow | null = null
 let server: MediaServer
 let queue: Queue
+let markers: MarkerFinder
 let encoder = 'libx264'
 let osClient: OpenSubtitles | null = null
 
@@ -154,10 +156,11 @@ function sidecars(video: string): SubTrack[] {
     const flags = n.toLowerCase().slice(stem.length)
     const sdh = /\.(sdh|cc)\b/.test(flags)
     const forced = /\.forced\b/.test(flags)
+    const release = subRelease(db, path.join(dir, n))
     out.push({
       id: `file:${path.join(dir, n)}`,
       label: `English${sdh ? ' SDH' : ''}${forced ? ' (forced)' : ''}`,
-      detail: `File, ${ext.slice(1).toUpperCase()}`,
+      detail: release ? `Downloaded · ${release}` : `File, ${ext.slice(1).toUpperCase()}`,
       language: 'eng',
       format: ext === '.ass' || ext === '.ssa' ? 'ass' : 'text',
     })
@@ -288,6 +291,20 @@ function registerIpc() {
     const f = await fileProbe(fileId)
     return f ? keyframeBefore(bin('ffprobe'), f.path, t) : 0
   })
+  h('play:markers', async (fileId: number) => {
+    const row = fileRow(db, fileId)
+    if (!row || row.kind !== 'show' || !row.season) return {}
+    const ids = (db.prepare('SELECT id FROM files WHERE title_id = ? AND present = 1 AND season > 0 ORDER BY season, episode').all(row.title_id) as { id: number }[]).map((r) => r.id)
+    const i = ids.indexOf(fileId)
+    const ep = async (id: number) => {
+      const f = await fileProbe(id)
+      return f ? { path: f.path, duration: Number(f.probe.format.duration ?? 0) } : null
+    }
+    const me = await ep(fileId)
+    if (!me || i < 0) return {}
+    const near = (await Promise.all([ids[i - 1], ids[i + 1]].filter((x) => x !== undefined).map(ep))).filter((x) => !!x)
+    return markers.find(me, near)
+  })
   h('play:sprites', async (fileId: number) => {
     const f = await fileProbe(fileId)
     if (!f) return null
@@ -339,7 +356,9 @@ function registerIpc() {
         error = (e as Error).message
       }
     }
-    return { results: rank(results, q.fileName).slice(0, 30), error: results.length ? undefined : error, quota: osClient?.quota }
+    const have = new Set(sidecars(q.path).map((t) => subRelease(db, t.id.slice(5))).filter(Boolean))
+    const ranked = rank(results, q.fileName).slice(0, 30).map((c) => ({ ...c, have: have.has(c.release) }))
+    return { results: ranked, error: results.length ? undefined : error, quota: osClient?.quota }
   })
   h('subs:download', async (fileId: number, cand: SubCandidate) => {
     const q = subQuery(fileId)
@@ -348,6 +367,7 @@ function registerIpc() {
     try {
       const text = decodeSub(await p.download(cand))
       const saved = saveSub(q.path, text, guessExt(text), cand.hearingImpaired)
+      noteSub(db, saved, cand.release)
       const id = `file:${saved}`
       return { track: subTracks(fileId, q.path, (await fileProbe(fileId))!.probe).find((t) => t.id === id), quota: osClient?.quota }
     } catch (e) {
@@ -357,8 +377,9 @@ function registerIpc() {
   })
   h('subs:auto', async (fileId: number) => {
     const q = subQuery(fileId)
-    const ok = await downloadBestSub(subProviders(), q, q.path).catch(() => false)
-    return ok ? playInfo(fileId).then((i) => i.subs) : null
+    const got = await downloadBestSub(subProviders(), q, q.path).catch(() => null)
+    if (got) noteSub(db, got.path, got.release)
+    return got ? playInfo(fileId).then((i) => i.subs) : null
   })
   h('queue:get', () => queue.state())
   h('queue:pause', (p: boolean) => queue.setPaused(p))
@@ -368,7 +389,15 @@ function registerIpc() {
     const t = db.prepare('SELECT folder FROM titles WHERE id = ?').get(titleId) as { folder: string } | undefined
     if (t) queue.refix(t.folder, pick)
   })
-  h('window:fullscreen', (on: boolean) => !E2E && win?.setFullScreen(on))
+  h('window:fullscreen', (on: boolean) => {
+    if (E2E || !win || win.isFullScreen() === on) return false
+    win.setFullScreen(on)
+    return true
+  })
+  h('window:minimize', () => win?.minimize())
+  h('window:maximize', () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()))
+  h('window:close', () => win?.close())
+  h('window:state', () => ({ maximized: !!win?.isMaximized(), fullscreen: !!win?.isFullScreen() }))
   h('shell:log', () => shell.openPath(logFile))
   h('shell:folder', (p: string) => shell.showItemInFolder(p))
 }
@@ -386,8 +415,8 @@ function createWindow() {
     show: false,
     title: 'Flick',
     backgroundColor: '#0C0C0D',
+    // no system title bar; the page draws its own window buttons
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#0C0C0D', symbolColor: '#EEEAE3', height: 40 },
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: !E2E },
   })
@@ -406,6 +435,8 @@ function createWindow() {
     win!.maximize()
     win!.show()
   })
+  win.on('maximize', () => win?.webContents.send('window:maximized', true))
+  win.on('unmaximize', () => win?.webContents.send('window:maximized', false))
   win.on('enter-full-screen', () => win?.webContents.send('window:fullscreen', true))
   win.on('leave-full-screen', () => win?.webContents.send('window:fullscreen', false))
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -449,6 +480,7 @@ app.whenReady().then(async () => {
     onChange: () => win?.webContents.send('queue:changed'),
     onLibrary: libraryChanged,
   })
+  markers = new MarkerFinder(db, () => bin('ffmpeg'), log)
   registerIpc()
   detectEncoder()
   createWindow()

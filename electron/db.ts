@@ -36,6 +36,8 @@ export function openDb(file: string): DB {
       track TEXT,
       delay REAL NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS sub_files (path TEXT PRIMARY KEY, release TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS markers (path TEXT PRIMARY KEY, intro_start REAL, intro_end REAL, credits REAL, checked INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS queue (
       id INTEGER PRIMARY KEY,
@@ -54,6 +56,15 @@ export function openDb(file: string): DB {
     );
   `)
   return db
+}
+
+/** Remember which release a downloaded subtitle file came from, so menus can name it. */
+export function noteSub(db: DB, file: string, release: string) {
+  db.prepare('INSERT OR REPLACE INTO sub_files (path, release) VALUES (?, ?)').run(file, release)
+}
+
+export function subRelease(db: DB, file: string) {
+  return (db.prepare('SELECT release FROM sub_files WHERE path = ?').get(file) as { release: string } | undefined)?.release
 }
 
 export function getSetting<T>(db: DB, key: string, fallback: T): T {

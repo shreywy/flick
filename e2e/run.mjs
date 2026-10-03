@@ -18,7 +18,7 @@ const app = await electron.launch({
 const page = await app.firstWindow()
 const logs = []
 page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`))
-page.on("pageerror", (e) => logs.push(`[pageerror] ${e.stack}`))
+page.on("pageerror", (e) => logs.push(`[pageerror] ${e.name}: ${e.message} ${e.stack ?? ""}`))
 await page.waitForLoadState('domcontentloaded')
 
 let n = 0

@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { QueueItem, QueueState, QueueStatus, QueueStep } from '../shared/types'
 import type { DB } from './db'
-import { getSetting, setSetting } from './db'
+import { getSetting, noteSub, setSetting } from './db'
 import { episodeFiles, fetchMetadata, readMeta } from './metadata'
 import { clean, isSample, isVideo, movieName } from './parse'
 import { probe, subFormat, subStreams } from './probe'
@@ -237,11 +237,12 @@ export class Queue {
         hash: openSubtitlesHash(v.path),
         fileName: path.basename(v.path),
       }
-      const ok = await downloadBestSub(providers, q, v.path).catch((e) => {
+      const got = await downloadBestSub(providers, q, v.path).catch((e) => {
         if (e instanceof QuotaError) throw e
-        return false
+        return null
       })
-      if (!ok) missing++
+      if (got) noteSub(this.d.db, got.path, got.release)
+      else missing++
     }
     if (missing) {
       this.update(r.id, { step: 'done', status: 'attention', message: `No English subtitles for ${missing === 1 ? 'this file' : `${missing} files`}`, action: 'subs' })
@@ -323,14 +324,13 @@ export async function downloadBestSub(providers: SubProvider[], q: SubQuery, vid
         const buf = await p.download(c)
         const text = decodeSub(buf)
         if (text.trim().length < 50) continue
-        saveSub(video, text, guessExt(text), c.hearingImpaired)
-        return true
+        return { path: saveSub(video, text, guessExt(text), c.hearingImpaired), release: c.release }
       } catch (e) {
         if (e instanceof QuotaError) throw e
       }
     }
   }
-  return false
+  return null
 }
 
 /** After a Fix match, give a badly named movie folder (and its files) the real title. Shows keep their folder. */

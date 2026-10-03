@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { COLLECTIONS } from '../../shared/collections'
-import { go, useApp } from '../App'
+import { go, play as playFile, useApp } from '../App'
 import { Img, metaLine, PosterCard, Row, ThumbCard } from '../components'
 import { Play } from '../icons'
 import { continueWatching, epTag, timeLeft, type Resume } from '../lib'
@@ -25,11 +25,12 @@ export default function Home() {
 
   const lead: Resume | undefined = resume[0]
   const heroTitle = lead?.title ?? recent[0]
-  const play = (r: Resume) => go(`#/play/${r.fileId}`)
+  const play = (r: Resume, el?: Element | null) => playFile(r.fileId, el)
+  const heroFile = lead?.fileId ?? (heroTitle.kind === 'movie' ? heroTitle.fileId : undefined)
 
   return (
     <main className="page">
-      <section className="hero">
+      <section className="hero" data-file={heroFile}>
         <Img src={heroTitle.backdrop} className="hero-art" />
         <div className="hero-body">
           {heroTitle.logo ? (
@@ -42,7 +43,7 @@ export default function Home() {
           <div className="actions">
             <button
               className="btn primary"
-              onClick={() => (lead ? play(lead) : heroTitle.kind === 'movie' ? go(`#/play/${heroTitle.fileId}`) : go(`#/title/${heroTitle.id}`))}
+              onClick={(e) => (heroFile ? playFile(heroFile, e.currentTarget.closest('.hero')) : go(`#/title/${heroTitle.id}`))}
             >
               <Play />
               {lead?.progress ? 'Resume' : 'Play'}
@@ -71,7 +72,8 @@ export default function Home() {
               title={r.title.name}
               right={r.episode ? `${epTag(r.episode)}${r.progress ? ' · ' + timeLeft(r.progress) : ''}` : r.progress ? timeLeft(r.progress) : ''}
               progress={r.progress ? r.progress.position / r.progress.duration : undefined}
-              onClick={() => play(r)}
+              fileId={r.fileId}
+              onClick={(el) => play(r, el)}
             />
           ))}
         </Row>

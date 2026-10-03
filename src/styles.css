@@ -71,7 +71,7 @@ img {
   position: fixed;
   inset: 0 0 auto 0;
   height: 5.3rem;
-  padding: 0 calc(var(--gutter) + 130px) 0 var(--gutter);
+  padding: 0 calc(var(--gutter) + 140px) 0 var(--gutter);
   display: flex;
   align-items: center;
   gap: 3.4rem;
@@ -1017,5 +1017,123 @@ img {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* ---------- window buttons ---------- */
+.dragbar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2.4rem;
+  z-index: 15;
+  -webkit-app-region: drag;
+}
+.wctl {
+  position: fixed;
+  top: 0;
+  right: 0;
+  display: flex;
+  z-index: 70;
+  -webkit-app-region: no-drag;
+  view-transition-name: wctl;
+  transition: opacity 0.25s;
+}
+.wctl button {
+  width: 46px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  transition: background 0.12s, color 0.12s;
+}
+.wctl button:hover {
+  background: var(--fill);
+  color: var(--text);
+}
+.wctl button.close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+.wctl svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.wctl .close svg {
+  shape-rendering: geometricPrecision;
+}
+.p-idle .wctl {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------- page transitions ---------- */
+.header {
+  view-transition-name: site-header;
+}
+::view-transition-group(*) {
+  animation-duration: 0.28s;
+  animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1);
+}
+::view-transition-old(flick-play),
+::view-transition-new(flick-play) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+::view-transition-group(flick-play) {
+  overflow: hidden;
+}
+/* playing: the page dims while the card moves to the middle, then the player opens out of it */
+html[data-nav='play']::view-transition-old(root) {
+  animation: 0.82s both vt-page-out;
+}
+html[data-nav='play']::view-transition-new(root) {
+  animation: 0.4s 0.42s both vt-in;
+}
+html[data-nav='play']::view-transition-old(flick-play) {
+  animation: 0.3s 0.4s both vt-out;
+}
+html[data-nav='play']::view-transition-new(flick-play) {
+  animation: 0.3s 0.4s both vt-in;
+}
+html[data-nav='leave']::view-transition-group(*) {
+  animation-duration: 0.5s;
+}
+html[data-nav='leave']::view-transition-old(root) {
+  animation: 0.3s both vt-out;
+}
+html[data-nav='leave']::view-transition-new(root) {
+  animation: 0.45s 0.05s both vt-in;
+}
+@keyframes vt-page-out {
+  45% {
+    opacity: 0.3;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vt-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes vt-out {
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0.01s !important;
+    animation-delay: 0s !important;
   }
 }

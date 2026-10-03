@@ -337,6 +337,14 @@
   font-size: 0.68rem;
   color: var(--faint);
 }
+.mlist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  max-height: min(20rem, 45vh);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
 .mrow .val {
   margin-left: auto;
   font-size: 0.72rem;
@@ -549,4 +557,42 @@
 .upnext .nm {
   font-size: 0.95rem;
   font-weight: 600;
+}
+
+.p-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  view-transition-name: flick-play;
+}
+.p-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  transition: opacity 0.5s;
+}
+.p-art.gone {
+  opacity: 0;
+}
+.p-skip {
+  position: absolute;
+  right: 3.4rem;
+  bottom: 7rem;
+  padding: 0.7rem 1.3rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(20, 20, 22, 0.82);
+  border: 1px solid rgba(238, 234, 227, 0.22);
+  border-radius: 8px;
+  cursor: pointer;
+  z-index: 4;
+  animation: vt-in 0.3s both;
+}
+.p-skip:hover {
+  background: var(--text);
+  color: #111;
 }

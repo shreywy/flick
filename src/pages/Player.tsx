@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PlayInfo, SubStyle, SubTrack } from '../../shared/types'
 import { api, type SpriteInfo } from '../api'
-import { go, useApp } from '../App'
+import { afterNav, go, useApp } from '../App'
 import CaptionsMenu from '../CaptionsMenu'
 import { MseFeeder } from '../mse'
-import { Back, Captions, Fullscreen, Next, Pause, Play, Skip, Spinner, Volume } from '../icons'
+import { Back, Fullscreen, Gear, Next, Pause, Play, Skip, Spinner, Volume } from '../icons'
 import { epTag, fmtClock, nextEpisode } from '../lib'
 import { activeCues, cueStyle, parseCues, type Cue } from '../subs'
 
@@ -12,7 +12,13 @@ type ZoomMode = 'fit' | 'fill' | 'zoom'
 const RATES = [1, 1.25, 1.5, 2, 0.75]
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
 
-function leave() {
+/** Leave the player. Fullscreen ends first, so the way back animates in a window that isn't changing size. */
+async function leave() {
+  const resized = new Promise((r) => {
+    addEventListener('resize', r, { once: true })
+    setTimeout(r, 350)
+  })
+  if (await api.setFullscreen(false)) await resized
   if (history.length > 1) history.back()
   else go('#/')
 }
@@ -61,6 +67,9 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
   const [vsize, setVsize] = useState({ w: 0, h: 0 })
   const [screen, setScreen] = useState({ W: innerWidth, H: innerHeight })
   const [countdown, setCountdown] = useState<number | null>(null)
+  const [marks, setMarks] = useState<{ intro?: [number, number]; credits?: number }>({})
+  const [framed, setFramed] = useState(false)
+  const creditsSeen = useRef(false)
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const jassub = useRef<{ destroy: () => void; timeOffset: number } | null>(null)
   const duration = info?.duration ?? 0
@@ -117,7 +126,7 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
 
   // ---------- loading ----------
   const load = useCallback(
-    async (t: number, a = audioRef.current) => {
+    async (t: number, a = audioRef.current, play = true) => {
       const v = video.current
       if (!v || !info) return
       const seq = ++loadSeq.current
@@ -151,14 +160,14 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
         }
         v.currentTime = t
       }
-      v.play().catch(() => undefined)
+      if (play) v.play().catch(() => undefined)
     },
     [info, fileId],
   )
 
   useEffect(() => {
     let alive = true
-    api.setFullscreen(true)
+    afterNav(() => alive && api.setFullscreen(true))
     api
       .playInfo(fileId)
       .then((i) => {
@@ -176,6 +185,7 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
       .catch((e: Error) => setErr(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
     api.sprites(fileId).then((s) => alive && setSprite(s))
     api.crop(fileId).then((c) => alive && setCrop(c))
+    api.markers(fileId).then((m) => alive && setMarks(m))
     return () => {
       alive = false
       feeder.current?.destroy()
@@ -184,7 +194,7 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
   }, [fileId])
 
   useEffect(() => {
-    if (info) load(start ? 0 : info.position)
+    if (info) load(start ? 0 : info.position, audioRef.current, start || info.position < 5)
     // only once per file
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [info])
@@ -237,15 +247,24 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
     if (next && settings.autoplayNext) setCountdown(10)
   }
 
+  const playNext = useCallback(() => {
+    if (!next) return
+    if (info) {
+      curRef.current = info.duration
+      api.saveProgress(fileId, info.duration, info.duration)
+    }
+    location.replace(`#/play/${next.fileId}`)
+  }, [next, info, fileId])
+
   useEffect(() => {
     if (countdown === null) return
     if (countdown <= 0) {
-      location.replace(`#/play/${next!.fileId}`)
+      playNext()
       return
     }
     const t = setTimeout(() => setCountdown((c) => (c === null ? null : c - 1)), 1000)
     return () => clearTimeout(t)
-  }, [countdown, next])
+  }, [countdown, playNext])
 
   // ---------- seeking ----------
   const seek = useCallback(
@@ -347,6 +366,10 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
     hideTimer.current = setTimeout(() => setUi(false), 2500)
   }, [])
   const showUi = ui || !playing || menu || !!err || ended
+  useEffect(() => {
+    document.body.classList.toggle('p-idle', !showUi)
+    return () => document.body.classList.remove('p-idle')
+  }, [showUi])
 
   // ---------- keys ----------
   useEffect(() => {
@@ -424,7 +447,17 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
 
   const label = title ? (ep ? `${title.name}` : title.name) : ''
   const sub = ep ? `${epTag(ep)} · ${ep.name}` : title?.year ? String(title.year) : ''
-  const showUpNext = !!next && (ended || (duration > 0 && duration - cur < 30 && cur > 60))
+  const inIntro = !!marks.intro && cur >= marks.intro[0] && cur < marks.intro[1] - 2
+  const inCredits = marks.credits !== undefined && cur >= marks.credits && !ended
+  const showUpNext = !!next && (ended || inCredits || (duration > 0 && duration - cur < 30 && cur > 60))
+
+  // credits roll: count down to the next episode, once per episode
+  useEffect(() => {
+    if (!inCredits || creditsSeen.current || !next || !settings.autoplayNext || !playing) return
+    creditsSeen.current = true
+    setCountdown(10)
+  }, [inCredits, next, settings.autoplayNext, playing])
+  const art = ep?.still ?? title?.backdrop
 
   return (
     <div
@@ -434,6 +467,7 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
       onMouseDown={() => menu && setMenu(false)}
       data-testid="player"
     >
+      <div className="p-stage">
       <video
         ref={video}
         onLoadedMetadata={() => {
@@ -454,7 +488,10 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
         }}
         onWaiting={() => setWaiting(true)}
         onPlaying={() => setWaiting(false)}
-        onCanPlay={() => setWaiting(false)}
+        onCanPlay={() => {
+          setWaiting(false)
+          setFramed(true)
+        }}
         onEnded={onEnded}
         onError={() => {
           const e = video.current?.error
@@ -466,6 +503,8 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
           setIsFs(!isFs)
         }}
       />
+      {art && <img className={`p-art${framed ? ' gone' : ''}`} src={art} alt="" draggable={false} />}
+      </div>
 
       {cues.length > 0 && <CueLayer video={video} offset={offset} cues={cues} delay={delay} style={style} lift={showUi} box={view.box} />}
 
@@ -479,6 +518,25 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
         <span className="t">{label}</span>
         <span className="s">{sub}</span>
       </div>
+
+      {inIntro && !menu && (
+        <button className="p-skip" onMouseDown={(e) => e.stopPropagation()} onClick={() => seek(marks.intro![1])}>
+          Skip intro
+        </button>
+      )}
+      {inCredits && !next && !menu && (
+        <button
+          className="p-skip"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={() => {
+            curRef.current = duration
+            api.saveProgress(fileId, duration, duration)
+            leave()
+          }}
+        >
+          Skip credits
+        </button>
+      )}
 
       {(waiting || !info) && !err && !ended && (
         <div className="p-center">
@@ -519,7 +577,7 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button className="btn small primary" onClick={() => location.replace(`#/play/${next.fileId}`)}>
+            <button className="btn small primary" onClick={playNext}>
               <Play size={16} />
               Play now
             </button>
@@ -582,8 +640,8 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
               <Next size={20} />
             </button>
           )}
-          <button className={`ctl${menu ? ' on' : ''}`} aria-label="Subtitles and audio" onClick={() => setMenu((m) => !m)}>
-            <Captions size={22} />
+          <button className={`ctl${menu ? ' on' : ''}`} aria-label="Player settings" title="Subtitles, audio and picture" onClick={() => setMenu((m) => !m)}>
+            <Gear size={21} />
           </button>
           <button className="ctl txt" aria-label="Playback speed" onClick={() => setRate((r) => RATES[(RATES.indexOf(r) + 1) % RATES.length])}>
             {rate}×

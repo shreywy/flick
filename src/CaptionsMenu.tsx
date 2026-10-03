@@ -104,7 +104,11 @@ export default function CaptionsMenu(p: Props) {
               <span className={`radio${p.track === t.id ? ' on' : ''}`} />
               <span className="col">
                 <span>{t.label}</span>
-                {t.detail && <span className="sub">{t.detail}</span>}
+                {t.detail && (
+                  <span className="sub rel" title={t.detail}>
+                    {t.detail}
+                  </span>
+                )}
               </span>
             </button>
           ))}
@@ -255,6 +259,7 @@ function FindView(p: Props & { back: () => void }) {
   const [quota, setQuota] = useState<Quota>()
   const [busy, setBusy] = useState<string | null>(null)
   const [done, setDone] = useState<Set<string>>(new Set())
+  const have = (c: SubCandidate) => c.have || done.has(c.key)
 
   const run = (query?: string) => {
     setResults(null)
@@ -314,15 +319,16 @@ function FindView(p: Props & { back: () => void }) {
           <Spinner size={18} />
         </div>
       )}
+      <div className="mlist">
       {results?.map((c) => (
-        <div key={c.key} className={`mrow${done.has(c.key) ? ' sel' : ''}`}>
+        <div key={c.key} className={`mrow${have(c) ? ' sel' : ''}`}>
           <span className="rel" title={c.release}>
             {c.release}
           </span>
           {c.sameRelease && <span className="tag">Same release</span>}
           {c.hearingImpaired && <span className="tag">SDH</span>}
-          {done.has(c.key) ? (
-            <Check size={16} style={{ color: 'var(--accent)' }} />
+          {have(c) ? (
+            <Check size={16} style={{ color: 'var(--accent)' }} aria-label="Downloaded" />
           ) : busy === c.key ? (
             <Spinner size={20} />
           ) : (
@@ -332,6 +338,7 @@ function FindView(p: Props & { back: () => void }) {
           )}
         </div>
       ))}
+      </div>
       {results && !results.length && !error && <div className="mnote">Nothing found. Try searching by name.</div>}
       {error && <div className="mnote warn">{error}</div>}
       <div className="mnote">

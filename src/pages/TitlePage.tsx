@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PlayInfo, Title } from '../../shared/types'
 import { api } from '../api'
-import { go, useApp } from '../App'
+import { go, play, useApp } from '../App'
 import { Img, metaLine, PosterCard, Row } from '../components'
 import FixMatch from '../FixMatch'
 import { Back, Captions, Check, Play } from '../icons'
@@ -86,7 +86,7 @@ function MoviePage({ t }: { t: Title }) {
   return (
     <main className="page">
       <BackButton />
-      <section className="title-hero">
+      <section className="title-hero" data-file={t.fileId}>
         <Img src={t.backdrop} className="hero-art" />
         <div className="title-body">
           {t.logo ? <Img src={t.logo} className="hero-logo" alt={t.name} /> : <h1 className={`hero-title${t.name.length > 18 ? ' long' : ''}`}>{t.name}</h1>}
@@ -112,12 +112,12 @@ function MoviePage({ t }: { t: Title }) {
             </div>
           )}
           <div className="actions">
-            <button className="btn primary" onClick={() => go(`#/play/${t.fileId}`)}>
+            <button className="btn primary" onClick={(e) => play(t.fileId!, e.currentTarget.closest('.title-hero'))}>
               <Play />
               {started ? 'Resume' : 'Play'}
             </button>
             {started && (
-              <button className="btn" onClick={() => go(`#/play/${t.fileId}/start`)}>
+              <button className="btn" onClick={(e) => play(t.fileId!, e.currentTarget.closest('.title-hero'), true)}>
                 Start over
               </button>
             )}
@@ -183,7 +183,7 @@ function ShowPage({ t, season }: { t: Title; season?: number }) {
           {m?.overview && <p className="overview">{m.overview}</p>}
           <div className="actions">
             {resume && (
-              <button className="btn primary" onClick={() => go(`#/play/${resume.fileId}`)}>
+              <button className="btn primary" onClick={(e) => play(resume.fileId, e.currentTarget.closest('.title-hero'))}>
                 <Play />
                 {resume.progress ? 'Resume' : resume.updated ? 'Play' : 'Start'} {epTag(resume.episode!)}
               </button>
@@ -217,7 +217,7 @@ function ShowPage({ t, season }: { t: Title; season?: number }) {
           const p = lib.progress[e.fileId]
           const started = isStarted(p)
           return (
-            <button key={e.fileId} className="ep" onClick={() => go(`#/play/${e.fileId}`)}>
+            <button key={e.fileId} className="ep" data-file={e.fileId} onClick={(ev) => play(e.fileId, ev.currentTarget)}>
               <div className="thumb-art">
                 <Img src={e.still ?? t.backdrop} className={p?.watched ? 'seen' : ''} />
                 {p?.watched && (

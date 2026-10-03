@@ -35,9 +35,23 @@ export function PosterCard({ t, sub, name }: { t: Title; sub?: string; name?: Re
   )
 }
 
-export function ThumbCard({ img, title, right, progress, onClick }: { img?: string; title: string; right?: string; progress?: number; onClick: () => void }) {
+export function ThumbCard({
+  img,
+  title,
+  right,
+  progress,
+  fileId,
+  onClick,
+}: {
+  img?: string
+  title: string
+  right?: string
+  progress?: number
+  fileId?: number
+  onClick: (el: HTMLElement) => void
+}) {
   return (
-    <button className="thumb" onClick={onClick}>
+    <button className="thumb" data-file={fileId} onClick={(e) => onClick(e.currentTarget)}>
       <div className="thumb-art">
         <Img src={img} />
         {progress !== undefined && (

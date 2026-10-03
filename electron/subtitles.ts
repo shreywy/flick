@@ -106,10 +106,18 @@ export class OpenSubtitles {
       .join('&')
     const res = await fetch(`${this.base}/subtitles?${qs}`, { headers: this.headers(), signal: AbortSignal.timeout(20000) })
     if (!res.ok) throw new Error(`OpenSubtitles search failed (${res.status})`)
-    type R = { data: { attributes: { release: string; hearing_impaired: boolean; moviehash_match?: boolean; download_count: number; language: string; files: { file_id: number }[] } }[] }
+    type Feature = { tmdb_id?: number; parent_tmdb_id?: number; season_number?: number; episode_number?: number }
+    type R = { data: { attributes: { release: string; hearing_impaired: boolean; moviehash_match?: boolean; download_count: number; language: string; files: { file_id: number }[]; feature_details?: Feature } }[] }
     const j = (await res.json()) as R
+    // a hash search also returns whatever else shares that hash, so drop subtitles made for a different title or episode
+    const ours = (f?: Feature) => {
+      if (!f || q.query || !q.tmdbId) return true
+      if (q.kind === 'movie') return !f.tmdb_id || f.tmdb_id === q.tmdbId
+      if (f.parent_tmdb_id && f.parent_tmdb_id !== q.tmdbId) return false
+      return !f.season_number || !f.episode_number || (f.season_number === q.season && f.episode_number === q.episode)
+    }
     return j.data
-      .filter((d) => d.attributes.language === 'en' && d.attributes.files.length)
+      .filter((d) => d.attributes.language === 'en' && d.attributes.files.length && ours(d.attributes.feature_details))
       .map((d) => ({
         provider: 'opensubtitles' as const,
         id: String(d.attributes.files[0].file_id),

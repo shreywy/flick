@@ -55,6 +55,8 @@ export class MseFeeder {
         await this.idle()
       }
     }
+    // something can slip an append in while we waited; the offset can only change when the buffer is idle
+    while (this.sb.updating) await this.idle()
     if (gen !== this.gen) return
     this.sb.timestampOffset = offset
     const ctrl = (this.ctrl = new AbortController())
