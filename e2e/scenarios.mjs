@@ -371,3 +371,32 @@ export async function zoomplay(ctx) {
   await sleep(1500)
   await shot('back-title')
 }
+
+// Play buttons: a film's grows into the player; a show's flies from the episode's card (or grows, if the card is off screen).
+export async function buttons(ctx) {
+  const { page, shot, sleep, log } = ctx
+  await page.locator('.header').waitFor({ timeout: 30000 })
+  const lib = await page.evaluate(() => window.flick.invoke('library:get'))
+  const vtStarted = () => page.waitForFunction(() => document.getAnimations().some((a) => String(a.effect?.pseudoElement ?? '').startsWith('::view-transition')), null, { timeout: 8000 })
+  const freeze = async (label, ms, fracs) => {
+    for (const f of fracs) {
+      await page.evaluate((t) => document.getAnimations().forEach((a) => String(a.effect?.pseudoElement ?? '').startsWith('::view-transition') && (a.pause(), (a.currentTime = t))), f * ms)
+      await shot(`${label}-${Math.round(f * 100)}`)
+    }
+    await page.evaluate(() => document.getAnimations().forEach((a) => a.play()))
+  }
+  for (const name of ['Your Name', 'The Mandalorian']) {
+    const t = lib.titles.find((x) => x.name.startsWith(name))
+    await page.evaluate((id) => (location.hash = `#/title/${id}`), t.id)
+    await sleep(1800)
+    await page.locator('.title-hero .btn.primary').click()
+    await vtStarted()
+    const nav = await page.evaluate(() => document.documentElement.dataset.nav)
+    log(name, 'nav', nav)
+    await freeze(name.split(' ').pop(), nav === 'expand' ? 560 : 820, [0.25, 0.6])
+    await sleep(2000)
+    await shot(`${name.split(' ').pop()}-player`)
+    await page.keyboard.press('Escape')
+    await sleep(1800)
+  }
+}

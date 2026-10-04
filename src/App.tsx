@@ -34,20 +34,26 @@ const scrolls = new Map<string, number>()
 let popped = false
 let from: DOMRect | null = null
 let zoom = false
+let fromButton: string | null = null // set when a Play button (not a picture) opens the player: its corner radius
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
 
-/** Open the player, growing `el`'s artwork into it. A banner-sized picture would just jump, so those zoom the page instead. */
+/** Open the player, growing `el` into it: a card's picture flies to the middle then opens out, a Play button
+ *  expands straight to full screen. A banner-sized picture would just jump, so those zoom the page instead. */
 export function play(fileId: number, el?: Element | null, startOver = false) {
   const img = el?.querySelector('img') ?? el
   const r = img?.getBoundingClientRect()
-  if (img instanceof HTMLElement && r && r.width < innerWidth * 0.4) {
+  if (el instanceof HTMLButtonElement && !el.querySelector('img')) {
+    el.style.viewTransitionName = 'flick-play'
+    from = el.getBoundingClientRect()
+    fromButton = getComputedStyle(el).borderRadius
+  } else if (img instanceof HTMLElement && r && r.width < innerWidth * 0.4) {
     img.style.viewTransitionName = 'flick-play'
     from = r
   } else zoom = true
   go(`#/play/${fileId}${startOver ? '/start' : ''}`)
 }
 
-const onScreen = (r: DOMRect) => r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth
+export const onScreen = (r: DOMRect) => r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth
 
 function imagesReady(ms: number) {
   const imgs = [...document.images].filter((i) => onScreen(i.getBoundingClientRect()))
@@ -57,10 +63,11 @@ function imagesReady(ms: number) {
 
 type Box = { x: number; y: number; w: number; h: number }
 const PLAY_MS = 820
+const EXPAND_MS = 560
 const LEAVE_MS = 620
 
 /** Card -> middle of the screen -> full screen (or the reverse), on the flick-play group. */
-function fly(card: DOMRect | null, dir: 'in' | 'out') {
+function fly(card: DOMRect | null, dir: 'in' | 'out', button?: string) {
   const W = innerWidth
   const H = innerHeight
   const full: Box = { x: 0, y: 0, w: W, h: H }
@@ -70,6 +77,20 @@ function fly(card: DOMRect | null, dir: 'in' | 'out') {
   // the way back is one continuous move into the card; with no card it settles in the middle and fades
   const direct = dir === 'out' && !!card
   const path = dir === 'in' ? [base, mid, full] : card ? [full, base] : [full, mid]
+  if (button) {
+    // a Play button grows straight out to the edges
+    document.documentElement.animate(
+      {
+        transform: [`translate(${base.x}px, ${base.y}px)`, 'translate(0px, 0px)'],
+        width: [`${base.w}px`, `${W}px`],
+        height: [`${base.h}px`, `${H}px`],
+        borderRadius: [button, '0px'],
+        easing: ['cubic-bezier(.45,0,.1,1)', 'linear'],
+      } as unknown as Keyframe[],
+      { duration: EXPAND_MS, pseudoElement: '::view-transition-group(flick-play)', fill: 'both' },
+    )
+    return
+  }
   const kf: Record<string, unknown> = {
     transform: path.map((b) => `translate(${b.x}px, ${b.y}px)`),
     width: path.map((b) => `${b.w}px`),
@@ -125,8 +146,10 @@ function useHash() {
         await imagesReady(400)
       }
       if (!document.startViewTransition) return void update()
-      document.documentElement.dataset.nav = entering ? (from ? 'play' : zoom ? 'zoom' : 'page') : leaving ? 'leave' : 'page'
+      document.documentElement.dataset.nav = entering ? (fromButton && from ? 'expand' : from ? 'play' : zoom ? 'zoom' : 'page') : leaving ? 'leave' : 'page'
+      const button = fromButton ?? undefined
       zoom = false
+      fromButton = null
       // the top bar stays put only when both pages have it; otherwise it goes with the page it belongs to
       const bar = (h: string) => !/^#\/(play|title)\//.test(h)
       document.documentElement.dataset.bar = bar(prev) && bar(next) ? 'keep' : ''
@@ -134,7 +157,7 @@ function useHash() {
       const start = from
       from = null
       // a transition that gets cut short (another navigation, a resize) still lands on the new page
-      vt.ready.then(() => (entering && start ? fly(start, 'in') : leaving ? fly(to, 'out') : undefined)).catch(() => undefined)
+      vt.ready.then(() => (entering && start ? fly(start, 'in', button) : leaving ? fly(to, 'out') : undefined)).catch(() => undefined)
       vt.finished.finally(() => {
         delete document.documentElement.dataset.nav
         document.querySelectorAll<HTMLElement>('[style*="view-transition-name"]').forEach((el) => (el.style.viewTransitionName = ''))

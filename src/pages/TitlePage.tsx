@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PlayInfo, Title } from '../../shared/types'
 import { api } from '../api'
-import { go, play, useApp } from '../App'
+import { go, onScreen, play, useApp } from '../App'
 import { Img, metaLine, PosterCard, Row } from '../components'
 import FixMatch from '../FixMatch'
 import { Back, Captions, Check, Play } from '../icons'
@@ -112,12 +112,12 @@ function MoviePage({ t }: { t: Title }) {
             </div>
           )}
           <div className="actions">
-            <button className="btn primary" onClick={(e) => play(t.fileId!, e.currentTarget.closest('.title-hero'))}>
+            <button className="btn primary" onClick={(e) => play(t.fileId!, e.currentTarget)}>
               <Play />
               {started ? 'Resume' : 'Play'}
             </button>
             {started && (
-              <button className="btn" onClick={(e) => play(t.fileId!, e.currentTarget.closest('.title-hero'), true)}>
+              <button className="btn" onClick={(e) => play(t.fileId!, e.currentTarget, true)}>
                 Start over
               </button>
             )}
@@ -183,7 +183,11 @@ function ShowPage({ t, season }: { t: Title; season?: number }) {
           {m?.overview && <p className="overview">{m.overview}</p>}
           <div className="actions">
             {resume && (
-              <button className="btn primary" onClick={(e) => play(resume.fileId, e.currentTarget.closest('.title-hero'))}>
+              <button className="btn primary" onClick={(e) => {
+                  // fly from that episode's card when it's on screen, otherwise grow out of the button
+                  const card = document.querySelector(`.ep[data-file="${resume.fileId}"]`)
+                  play(resume.fileId, card && onScreen(card.getBoundingClientRect()) ? card : e.currentTarget)
+                }}>
                 <Play />
                 {resume.progress ? 'Resume' : resume.updated ? 'Play' : 'Start'} {epTag(resume.episode!)}
               </button>

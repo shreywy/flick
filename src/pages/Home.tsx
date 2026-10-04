@@ -48,7 +48,7 @@ export default function Home() {
                 // resuming: it's in Continue watching, so fly from that card when it's on screen
                 const card = document.querySelector(`.thumb[data-file="${heroFile}"]`)
                 const r = card?.getBoundingClientRect()
-                playFile(heroFile, r && r.top < innerHeight && r.bottom > 0 && r.left < innerWidth ? card : e.currentTarget.closest('.hero'))
+                playFile(heroFile, r && r.top < innerHeight && r.bottom > 0 && r.left < innerWidth ? card : e.currentTarget)
               }}
             >
               <Play />

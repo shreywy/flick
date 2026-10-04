@@ -1205,6 +1205,19 @@ html[data-nav='leave']::view-transition-old(flick-play) {
 html[data-nav='leave']::view-transition-new(flick-play) {
   animation: 0.26s 0.3s both ease-out vt-in;
 }
+/* playing from a Play button: the button grows to fill the screen, the player shows through as it does */
+html[data-nav='expand']::view-transition-old(root) {
+  animation: 0.56s both vt-page-out;
+}
+html[data-nav='expand']::view-transition-new(root) {
+  animation: 0.3s 0.26s both vt-in;
+}
+html[data-nav='expand']::view-transition-old(flick-play) {
+  animation: 0.14s both vt-out;
+}
+html[data-nav='expand']::view-transition-new(flick-play) {
+  animation: 0.24s 0.04s both vt-in;
+}
 /* playing from a banner: the page pushes in and the player fades up */
 html[data-nav='zoom']::view-transition-old(root) {
   animation: 0.4s both cubic-bezier(0.4, 0, 0.2, 1) vt-push;
