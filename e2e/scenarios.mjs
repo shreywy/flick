@@ -730,3 +730,130 @@ export async function menus(ctx) {
   await page.keyboard.press('Escape')
   log('ISSUES', issues.length ? '\n  ' + issues.join('\n  ') : 'none')
 }
+
+// Screenshots for the README and the project page.
+export async function shots(ctx) {
+  const { page, shot, sleep } = ctx
+  await page.locator('.header').waitFor({ timeout: 30000 })
+  const lib = await page.evaluate(() => window.flick.invoke('library:get'))
+  const find = (n) => lib.titles.find((x) => x.name.startsWith(n))
+  const to = async (h, ms = 1800) => {
+    await page.evaluate((x) => (location.hash = x), h)
+    await sleep(ms)
+  }
+  const pause = () => page.locator('video').evaluate((v) => v.pause())
+  // default subtitle look (earlier test runs leave it changed)
+  await page.evaluate(() =>
+    window.flick.invoke('settings:set', {
+      subStyle: { size: 42, font: 'Schibsted Grotesk', color: '#FFFFFF', background: '#000000', bgOpacity: 0.55, outline: 0, outlineColor: '#000000', shadow: 'soft', position: 10 },
+    }),
+  )
+  await page.mouse.move(3000, 1300)
+  await sleep(1500)
+  await shot('home')
+  await page.mouse.wheel(0, 800)
+  await page.evaluate(() => scrollBy(0, 760))
+  await sleep(900)
+  await shot('rows')
+  await page.evaluate(() => scrollTo(0, 0))
+  await to(`#/title/${find('The Mandalorian').id}`)
+  await shot('show')
+  await to(`#/title/${find('Interstellar').id}`)
+  await shot('movie')
+  await to('#/search', 700)
+  await page.getByLabel('Search your library').pressSequentially('star', { delay: 40 })
+  await sleep(700)
+  await shot('search')
+
+  // player: anime with styled subtitles
+  const w = find('Weathering')
+  await to(`#/play/${w.fileId}`, 3000)
+  await page.evaluate(() => window.__flickSeek(1290))
+  await sleep(6000)
+  await page.mouse.move(1700, 700)
+  await page.mouse.move(1720, 720)
+  await sleep(300)
+  await shot('player')
+  // seek preview
+  const bar = await page.getByRole('slider', { name: 'Seek' }).boundingBox()
+  await page.mouse.move(bar.x + bar.width * 0.62, bar.y + bar.height / 2)
+  await sleep(1200)
+  await shot('seek-preview')
+  await page.keyboard.press('Escape')
+  await sleep(1500)
+
+  // subtitle style menu over a film that has a plain-text subtitle track
+  let pick = null
+  for (const t of lib.titles.filter((x) => x.kind === 'movie' && !/Guardians/.test(x.name))) {
+    const info = await page.evaluate((id) => window.flick.invoke('play:info', id), t.fileId)
+    const sub = info.subs.find((x) => x.format === 'text')
+    if (sub) {
+      pick = { t, sub }
+      break
+    }
+  }
+  ctx.log('style shot uses', pick?.t.name, pick?.sub.label)
+  await page.evaluate(({ id, track }) => window.flick.invoke('subs:prefs', id, { track }), { id: pick.t.fileId, track: pick.sub.id })
+  await to(`#/play/${pick.t.fileId}`, 3000)
+  await page.mouse.move(1700, 700)
+  await page.getByRole('button', { name: 'Player settings' }).click()
+  await page.getByText('Style and timing').click()
+  await page.getByRole('button', { name: 'Reset' }).click()
+  await page.keyboard.press('Escape')
+  await page.evaluate(() => window.__flickSeek(1500))
+  await page.waitForSelector('.cue', { timeout: 90000 }).catch(() => ctx.log('no cue showed'))
+  await sleep(250)
+  await pause()
+  await page.mouse.move(1700, 700)
+  await page.getByRole('button', { name: 'Player settings' }).click()
+  await page.getByText('Style and timing').click()
+  await sleep(500)
+  await shot('subtitle-style')
+  await page.locator('.menu button[aria-label="Back"]').click()
+  await page.getByText('Picture', { exact: true }).click()
+  await sleep(400)
+  await shot('picture')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+  await sleep(1500)
+
+  // skip intro
+  const m = find('The Mandalorian')
+  const ep = m.episodes.find((e) => e.season === 2 && e.episode === 2)
+  await to(`#/play/${ep.fileId}`, 3000)
+  const mk = await page.evaluate((id) => window.flick.invoke('play:markers', id), ep.fileId)
+  await page.evaluate((t) => window.__flickSeek(t), mk.intro[0] + 6)
+  await sleep(4000)
+  await page.mouse.move(1700, 700)
+  await shot('skip-intro')
+  await page.keyboard.press('Escape')
+  await sleep(1800)
+
+  // right-click menu
+  await to('#/', 1500)
+  await page.locator('[data-row=resume] .thumb', { hasText: 'Mandalorian' }).click({ button: 'right' })
+  await sleep(400)
+  await shot('context-menu')
+}
+
+// A short screen recording of the card-to-player animation and back.
+export async function reel(ctx) {
+  const { page, sleep } = ctx
+  await page.locator('.header').waitFor({ timeout: 30000 })
+  await page.mouse.move(3000, 1300)
+  await sleep(2500)
+  await page.locator('[data-row=resume] .thumb', { hasText: 'Mandalorian' }).hover()
+  await sleep(700)
+  await page.locator('[data-row=resume] .thumb', { hasText: 'Mandalorian' }).click()
+  await sleep(3500)
+  await page.keyboard.press('Space')
+  await sleep(3500)
+  await page.keyboard.press('Escape')
+  await sleep(2500)
+  await page.locator('[data-row=recent] .poster').nth(2).click()
+  await sleep(2500)
+  await page.locator('.title-hero .btn.primary').click()
+  await sleep(3000)
+  await page.keyboard.press('Escape')
+  await sleep(2500)
+}

@@ -14,6 +14,7 @@ const app = await electron.launch({
   ...(process.env.FLICK_EXE ? { executablePath: process.env.FLICK_EXE, args: [] } : { args: [root] }),
   env: { ...process.env, FLICK_DEV: '1', FLICK_E2E: '1' },
   timeout: 60000,
+  ...(process.env.E2E_VIDEO ? { recordVideo: { dir: process.env.E2E_VIDEO, size: { width: 1720, height: 696 } } } : {}),
 })
 const page = await app.firstWindow()
 const logs = []

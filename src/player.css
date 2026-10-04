@@ -17,6 +17,15 @@
   object-fit: contain;
   background: #000;
 }
+/* styled (libass) subtitles: while the controls are up, shrink the subtitle layer from its top edge so the
+   bottom line clears the seek bar and signs at the top stay where they are */
+.player canvas.JASSUB {
+  transform-origin: 50% 0;
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.player.ui canvas.JASSUB {
+  transform: scale(0.9);
+}
 .player .jassub {
   position: absolute;
   pointer-events: none;
