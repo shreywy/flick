@@ -1152,6 +1152,10 @@ img.pending {
 }
 
 /* ---------- page transitions ---------- */
+/* clicks during an animation go to the page underneath instead of being swallowed */
+::view-transition {
+  pointer-events: none;
+}
 html[data-nav] .header {
   transition: none;
 }

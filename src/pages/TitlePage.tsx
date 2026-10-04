@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PlayInfo, Title } from '../../shared/types'
 import { api } from '../api'
-import { go, onScreen, play, useApp } from '../App'
+import { goBack, onScreen, play, useApp } from '../App'
 import { Img, metaLine, PosterCard, Row } from '../components'
 import FixMatch from '../FixMatch'
 import { Back, Captions, Check, Play } from '../icons'
@@ -28,7 +28,7 @@ export default function TitlePage({ id, season }: { id: number; season?: number 
 
 function BackButton() {
   return (
-    <button className="back" onClick={() => (history.length > 1 ? history.back() : go('#/'))}>
+    <button className="back" onClick={goBack}>
       <Back />
       Back
     </button>

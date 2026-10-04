@@ -156,9 +156,46 @@ function useHash() {
       const vt = document.startViewTransition(update)
       const start = from
       from = null
+      // scrolling, clicking or typing mid-transition: the page is moving under the animation, so finish it
+      // quickly and fade the flying picture rather than land it somewhere that's no longer right
+      let hurried = false
+      let running = false
+      const rush = () => {
+        for (const a of document.getAnimations()) {
+          if (String((a.effect as KeyframeEffect | null)?.pseudoElement ?? '').startsWith('::view-transition')) a.updatePlaybackRate(5)
+        }
+        document.documentElement.animate({ opacity: [1, 0] }, { duration: 100, fill: 'forwards', pseudoElement: '::view-transition-group(flick-play)' })
+      }
+      const hurry = (e: Event) => {
+        if (e instanceof KeyboardEvent && ['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return
+        if (hurried) return
+        hurried = true
+        if (running) rush()
+      }
+      const inputs = ['wheel', 'keydown', 'mousedown', 'touchstart'] as const
+      for (const t of inputs) addEventListener(t, hurry, { capture: true, passive: true })
+      // the browser sends clicks to the page root while a transition runs; finish it and hand the click on
+      const passClick = (e: MouseEvent) => {
+        if (e.target !== document.documentElement) return
+        vt.skipTransition()
+        vt.finished.then(() => {
+          const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('button, a, input, [role="slider"]')
+          el?.click()
+        })
+      }
+      addEventListener('click', passClick, true)
       // a transition that gets cut short (another navigation, a resize) still lands on the new page
-      vt.ready.then(() => (entering && start ? fly(start, 'in', button) : leaving ? fly(to, 'out') : undefined)).catch(() => undefined)
+      vt.ready
+        .then(() => {
+          if (entering && start) fly(start, 'in', button)
+          else if (leaving) fly(to, 'out')
+          running = true
+          if (hurried) rush()
+        })
+        .catch(() => undefined)
       vt.finished.finally(() => {
+        for (const t of inputs) removeEventListener(t, hurry, { capture: true })
+        setTimeout(() => removeEventListener('click', passClick, true))
         delete document.documentElement.dataset.nav
         document.querySelectorAll<HTMLElement>('[style*="view-transition-name"]').forEach((el) => (el.style.viewTransitionName = ''))
       })
@@ -185,6 +222,15 @@ export function useFullscreen() {
 }
 
 export const toggleFullscreen = () => api.windowState().then((s) => api.setFullscreen(!s.fullscreen))
+
+let backAt = 0
+/** history.back(), once: a double click on Back mustn't skip a page. */
+export function goBack() {
+  if (Date.now() - backAt < 700) return
+  backAt = Date.now()
+  if (history.length > 1) history.back()
+  else go('#/')
+}
 
 export function go(hash: string) {
   if (location.hash !== hash) location.hash = hash

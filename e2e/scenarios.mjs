@@ -400,3 +400,235 @@ export async function buttons(ctx) {
     await sleep(1800)
   }
 }
+
+// Rough handling: double presses, input mid-animation, rapid navigation, key spam in the player.
+// Uses The Mandalorian and Your Name only.
+export async function chaos(ctx) {
+  const { page, shot, sleep, log } = ctx
+  await page.locator('.header').waitFor({ timeout: 30000 })
+  const lib = await page.evaluate(() => window.flick.invoke('library:get'))
+  const mando = lib.titles.find((x) => x.name.includes('Mandalorian'))
+  const yn = lib.titles.find((x) => x.name.startsWith('Your Name'))
+  const issues = []
+  const hash = () => page.evaluate(() => location.hash)
+  const settle = async (label, want) => {
+    await sleep(1800)
+    const s = await page.evaluate(() => ({
+      hash: location.hash,
+      nav: document.documentElement.dataset.nav ?? null,
+      named: [...document.querySelectorAll('[style*="view-transition-name"]')].map((e) => e.className),
+      idle: document.body.classList.contains('p-idle'),
+      player: !!document.querySelector('.player'),
+      err: document.querySelector('.p-msg')?.textContent ?? null,
+    }))
+    const bad = []
+    if (want && !(want instanceof RegExp ? want.test(s.hash) : s.hash === want)) bad.push(`hash ${s.hash}, wanted ${want}`)
+    if (s.nav) bad.push(`transition stuck (${s.nav})`)
+    if (s.named.length) bad.push(`leftover transition names on ${s.named}`)
+    if (s.idle && !s.player) bad.push('player idle class left on body')
+    if (s.err) bad.push(`player error: ${s.err}`)
+    log(label, bad.length ? 'PROBLEM ' + bad.join('; ') : 'ok', s.hash)
+    if (bad.length) {
+      issues.push(`${label}: ${bad.join('; ')}`)
+      await shot(label)
+    }
+  }
+  const go = async (h) => {
+    await page.evaluate((x) => (location.hash = x), h)
+    await sleep(900)
+  }
+
+  // 1. Esc while the player is still opening
+  await go('#/movies')
+  await go(`#/title/${mando.id}`)
+  await page.locator('.ep').first().click()
+  await sleep(150)
+  await page.keyboard.press('Escape')
+  await settle('esc-while-opening', `#/title/${mando.id}`)
+
+  // 2. Esc twice quickly
+  await page.locator('.ep').first().click()
+  await sleep(3000)
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+  await settle('double-esc', `#/title/${mando.id}`)
+
+  // 3. scroll right after leaving the player
+  await page.locator('.ep').nth(1).click()
+  await sleep(3000)
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(() => document.documentElement.dataset.nav === 'leave', null, { timeout: 8000 })
+  await sleep(120)
+  await page.evaluate(() => {
+    window.dispatchEvent(new WheelEvent('wheel', { deltaY: 600 }))
+    scrollBy(0, 600)
+  })
+  const t0 = Date.now()
+  await page.waitForFunction(() => !document.documentElement.dataset.nav, null, { timeout: 5000 })
+  log('transition ended', Date.now() - t0, 'ms after scrolling')
+  await settle('scroll-while-returning', `#/title/${mando.id}`)
+  await page.evaluate(() => scrollTo(0, 0))
+
+  // 4. double click Back on a title page
+  await go('#/movies')
+  await go(`#/title/${yn.id}`)
+  await page.locator('.back').dblclick()
+  await settle('double-back', '#/movies')
+
+  // 5. tab spam
+  await page.getByRole('button', { name: 'Shows', exact: true }).click()
+  await sleep(40)
+  await page.getByRole('button', { name: 'Movies', exact: true }).click()
+  await sleep(40)
+  await page.getByRole('button', { name: 'Home', exact: true }).click()
+  await settle('tab-spam', '#/')
+  const ind = await page.evaluate(() => document.querySelector('.nav-ind')?.parentElement?.textContent)
+  if (ind !== 'Home') issues.push(`tab underline on ${ind}`)
+
+  // 6. key spam in the player
+  await go(`#/title/${mando.id}`)
+  await page.locator('.ep').nth(2).click()
+  await sleep(3500)
+  const before = Number(await page.getByRole('slider', { name: 'Seek' }).getAttribute('aria-valuenow'))
+  for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowRight')
+  await page.keyboard.press('Space')
+  await page.keyboard.press('Space')
+  await sleep(4000)
+  const after = Number(await page.getByRole('slider', { name: 'Seek' }).getAttribute('aria-valuenow'))
+  const v = await page.locator('video').evaluate((el) => ({ paused: el.paused, t: el.currentTime, ready: el.readyState }))
+  log('arrow x8', before, '->', after, JSON.stringify(v))
+  if (after - before < 70 || after - before > 95) issues.push(`8 skips moved ${after - before}s`)
+  if (v.paused) issues.push('video paused after space twice')
+  await settle('key-spam', /^#\/play\//)
+
+  // 7. menu open/close, then next-episode spam
+  await page.keyboard.press('c')
+  await sleep(200)
+  await page.keyboard.press('Escape')
+  await sleep(300)
+  if (!(await hash()).startsWith('#/play/')) issues.push('Esc with the menu open left the player')
+  await page.keyboard.press('n')
+  await sleep(60)
+  await page.keyboard.press('n')
+  await sleep(60)
+  await page.keyboard.press('n')
+  await sleep(4000)
+  const v2 = await page.locator('video').evaluate((el) => ({ paused: el.paused, t: el.currentTime }))
+  log('after n x3', await hash(), JSON.stringify(v2))
+  if (!(v2.t > 0.5)) issues.push('next-episode spam left the video not playing')
+  await settle('next-spam', /^#\/play\//)
+
+  // 8. resize mid-transition
+  await page.keyboard.press('Escape')
+  await sleep(1500)
+  await go('#/')
+  await page.getByRole('button', { name: 'Movies', exact: true }).click()
+  await ctx.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(2400, 1200))
+  await settle('resize-mid-transition', '#/movies')
+  await ctx.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(3440, 1392))
+
+  log('ISSUES', issues.length ? '\n  ' + issues.join('\n  ') : 'none')
+}
+
+export async function chaos2(ctx) {
+  const { page, shot, sleep, log, app } = ctx
+  await page.locator('.header').waitFor({ timeout: 30000 })
+  const lib = await page.evaluate(() => window.flick.invoke('library:get'))
+  const mando = lib.titles.find((x) => x.name.includes('Mandalorian'))
+  const issues = []
+  const state = () => page.evaluate(() => ({ hash: location.hash, nav: document.documentElement.dataset.nav ?? null, err: document.querySelector('.p-msg')?.textContent ?? null }))
+  const expect = async (label, ok, extra = '') => {
+    log(label, ok ? 'ok' : 'PROBLEM', extra)
+    if (!ok) {
+      issues.push(`${label} ${extra}`)
+      await shot(label)
+    }
+  }
+
+  // a. click the player's Back button while it is still opening
+  await page.evaluate((id) => (location.hash = `#/title/${id}`), mando.id)
+  await sleep(1500)
+  await page.locator('.ep').first().click()
+  await sleep(300)
+  await page.mouse.move(200, 200)
+  await page.getByRole('button', { name: 'Back' }).first().click().catch((e) => log('back click failed', e.message.split('\n')[0]))
+  await sleep(2000)
+  let s = await state()
+  await expect('back-while-opening', s.hash === `#/title/${mando.id}` && !s.nav, JSON.stringify(s))
+
+  // b. click another episode while the way back is still animating
+  await page.locator('.ep').nth(1).click()
+  await sleep(3000)
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(() => document.documentElement.dataset.nav === 'leave', null, { timeout: 8000 })
+  await sleep(100)
+  const want = await page.locator('.ep').nth(3).getAttribute('data-file')
+  await page.locator('.ep').nth(3).click({ force: true })
+  await sleep(3500)
+  s = await state()
+  await expect('click-during-return', s.hash === `#/play/${want}` && !s.nav, JSON.stringify(s))
+
+  // c. drag the seek bar, overshooting both ends
+  const bar = page.getByRole('slider', { name: 'Seek' })
+  await page.mouse.move(400, 400)
+  const b = await bar.boundingBox()
+  await page.mouse.move(b.x + b.width * 0.5, b.y + b.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(b.x - 300, b.y, { steps: 5 })
+  await page.mouse.move(b.x + b.width + 300, b.y, { steps: 5 })
+  await page.mouse.move(b.x + b.width * 0.4, b.y, { steps: 5 })
+  await page.mouse.up()
+  await sleep(3000)
+  const dur = Number(await bar.getAttribute('aria-valuemax'))
+  const now = Number(await bar.getAttribute('aria-valuenow'))
+  await expect('seek-drag', Math.abs(now - dur * 0.4) < dur * 0.02 + 5, `${now} of ${dur}, wanted ~${Math.round(dur * 0.4)}`)
+
+  // d. settings menu: Find more subtitles keeps a capped, scrolling list; Esc closes the menu only
+  await page.mouse.move(600, 600)
+  await page.mouse.move(640, 620)
+  await page.getByRole('button', { name: 'Player settings' }).click()
+  await page.getByText('Find more subtitles').click()
+  await sleep(1500)
+  const m = await page.evaluate(() => {
+    const menu = document.querySelector('.menu')
+    const list = document.querySelector('.mlist')
+    return { menuH: menu?.getBoundingClientRect().height, list: !!list, listMax: list ? getComputedStyle(list).maxHeight : null, vh: innerHeight, text: menu?.textContent?.slice(0, 120) }
+  })
+  log('find view', JSON.stringify(m))
+  await shot('find-subs')
+  await expect('menu-height', m.menuH < m.vh * 0.8, `${m.menuH}px of ${m.vh}`)
+  await page.keyboard.press('Escape')
+  await sleep(300)
+  s = await state()
+  await expect('esc-closes-menu', s.hash.startsWith('#/play/') && !(await page.locator('.menu').count()), JSON.stringify(s))
+
+  // e. resize while playing
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1600, 900))
+  await sleep(1200)
+  const fit = await page.locator('video').evaluate((el) => ({ w: el.getBoundingClientRect().width, vw: innerWidth, t: el.style.transform }))
+  await shot('player-small-window')
+  await expect('resize-while-playing', Math.abs(fit.vw - 1600) < 40, JSON.stringify(fit))
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(3440, 1392))
+  await sleep(800)
+
+  // f. search typed fast, open the first result
+  await page.keyboard.press('Escape')
+  await sleep(1500)
+  await page.evaluate(() => (location.hash = '#/search'))
+  await sleep(600)
+  await page.getByLabel('Search your library').pressSequentially('mand', { delay: 15 })
+  await sleep(500)
+  await page.locator('.poster').first().click()
+  await sleep(1500)
+  s = await state()
+  await expect('search-open', s.hash === `#/title/${mando.id}`, JSON.stringify(s))
+  // F typed in search must not toggle fullscreen (handled by the search box), checked by the key not being swallowed
+  await page.evaluate(() => (location.hash = '#/search'))
+  await sleep(600)
+  await page.getByLabel('Search your library').fill('')
+  await page.getByLabel('Search your library').press('f')
+  const typed = await page.getByLabel('Search your library').inputValue()
+  await expect('f-in-search', typed === 'f', `box has "${typed}"`)
+
+  log('ISSUES', issues.length ? '\n  ' + issues.join('\n  ') : 'none')
+}

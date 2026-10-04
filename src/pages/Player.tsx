@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PlayInfo, SubStyle, SubTrack } from '../../shared/types'
 import { api, type SpriteInfo } from '../api'
-import { go, toggleFullscreen, useApp, useFullscreen } from '../App'
+import { goBack, toggleFullscreen, useApp, useFullscreen } from '../App'
 import CaptionsMenu from '../CaptionsMenu'
 import { MseFeeder } from '../mse'
 import { Back, Fullscreen, Gear, Next, Pause, Play, Skip, Spinner, Volume } from '../icons'
@@ -15,10 +15,14 @@ const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
 // set by the open player: saves progress and reloads the library, so the page we return to is already final
 let beforeLeave: (() => Promise<unknown>) | null = null
 
+let exiting = false
+
 async function leave() {
+  // Esc twice, or Back then Esc, is one exit
+  if (exiting) return
+  exiting = true
   await beforeLeave?.().catch(() => undefined)
-  if (history.length > 1) history.back()
-  else go('#/')
+  goBack()
 }
 
 export default function Player({ fileId, start }: { fileId: number; start: boolean }) {
@@ -204,6 +208,7 @@ export default function Player({ fileId, start }: { fileId: number; start: boole
   )
 
   useEffect(() => {
+    exiting = false
     beforeLeave = async () => {
       await save()
       await refresh()

@@ -429,6 +429,7 @@ function createWindow() {
       // test runs: muted, off screen, never takes focus
       win!.setBounds({ x: -8000, y: 0, width: 3440, height: 1392 })
       win!.webContents.setAudioMuted(true)
+      win!.setSkipTaskbar(true)
       win!.showInactive()
       return
     }
