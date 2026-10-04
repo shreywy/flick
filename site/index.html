@@ -3,362 +3,527 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Flick, a player for the films on your drive</title>
-<meta name="description" content="Flick is a Windows app for watching your own movies and shows: automatic sorting, TMDB artwork, exact seeking on any file, skip intro and proper subtitles.">
+<title>Flick</title>
+<meta name="description" content="A Windows app for the films and shows on your own drive. Sorts new downloads, fetches TMDB artwork, and plays nearly any file with exact seeking.">
 <meta property="og:title" content="Flick">
-<meta property="og:description" content="A Windows app for watching the movies and shows on your own drive.">
+<meta property="og:description" content="A Windows app for the films and shows on your own drive.">
 <meta property="og:image" content="assets/home.jpg">
 <link rel="icon" href="assets/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
 <style>
+/* Colours, type and radii are Flick's own (src/styles.css), so the page looks like the app it describes. */
 :root {
   --bg: #0c0c0d;
-  --surface: #141416;
-  --raise: #1a1a1d;
+  --surface: #161618;
   --text: #eeeae3;
   --text-2: #c9c4bc;
-  --muted: #9a958d;
-  --line: rgba(238, 234, 227, 0.09);
+  --muted: #a39e96;
+  --faint: #85817a;
+  --fill: rgba(238, 234, 227, 0.12);
   --accent: #f2b544;
-  --gutter: clamp(16px, 5vw, 72px);
-  --max: 1240px;
+  --gutter: clamp(16px, 4.5vw, 96px);
+  --measure: 36rem;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 400 17px/1.6 'Schibsted Grotesk', system-ui, sans-serif;
+  font: 400 18px/1.62 'Schibsted Grotesk', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
-a { color: inherit; }
-img, video { display: block; max-width: 100%; }
-.wrap { max-width: var(--max); margin: 0 auto; padding: 0 var(--gutter); }
+a { color: inherit; text-decoration-color: rgba(238, 234, 227, 0.35); text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--accent); }
+img, video { display: block; max-width: 100%; height: auto; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-/* nav */
-nav {
-  position: sticky; top: 0; z-index: 10;
-  background: rgba(12, 12, 13, 0.7);
-  backdrop-filter: blur(18px) saturate(1.4);
-  border-bottom: 1px solid var(--line);
+/* top bar: transparent over the title, frosted once you scroll, same as the app's header */
+.bar {
+  position: fixed; inset: 0 0 auto; z-index: 20;
+  display: flex; align-items: center; gap: 32px;
+  height: 64px; padding: 0 var(--gutter);
+  border-bottom: 1px solid transparent;
+  transition: background .3s, border-color .3s, backdrop-filter .3s;
 }
-nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; letter-spacing: -0.03em; text-decoration: none; }
-.brand img { width: 26px; height: 26px; border-radius: 6px; }
-nav .links { display: flex; gap: 24px; margin-left: auto; font-size: 15px; color: var(--muted); }
-nav .links a { text-decoration: none; transition: color .15s; }
-nav .links a:hover { color: var(--text); }
+.bar.solid {
+  background: rgba(12, 12, 13, 0.6);
+  border-bottom-color: rgba(238, 234, 227, 0.06);
+  backdrop-filter: blur(24px) saturate(1.5);
+}
+.wordmark { font-size: 22px; font-weight: 800; letter-spacing: -0.035em; text-decoration: none; }
+.bar nav { display: flex; gap: 26px; font-size: 15px; font-weight: 500; color: var(--muted); }
+.bar nav a { text-decoration: none; transition: color .15s; }
+.bar nav a:hover { color: var(--text); }
+.bar .gh { margin-left: auto; font-size: 15px; font-weight: 500; color: var(--muted); text-decoration: none; }
+.bar .gh:hover { color: var(--text); }
+
+/* buttons, copied from the app */
 .btn {
-  display: inline-flex; align-items: center; gap: 9px;
-  height: 44px; padding: 0 20px; border-radius: 8px;
-  font-weight: 600; font-size: 15px; text-decoration: none;
-  background: rgba(238, 234, 227, 0.1); border: 1px solid transparent;
+  display: inline-flex; align-items: center; gap: 10px;
+  height: 48px; padding: 0 22px; border: 0; border-radius: 6px;
+  background: var(--fill); color: var(--text);
+  font: 600 16px/1 inherit; font-family: inherit; text-decoration: none; cursor: pointer;
   transition: background .15s, transform .12s;
 }
-.btn:hover { background: rgba(238, 234, 227, 0.16); }
-.btn:active { transform: scale(0.97); }
+.btn:hover { background: rgba(238, 234, 227, 0.2); }
+.btn:active { transform: scale(0.96); }
 .btn.primary { background: var(--text); color: var(--bg); }
 .btn.primary:hover { background: #fff; }
-.btn svg { width: 18px; height: 18px; }
-nav .btn { height: 36px; padding: 0 14px; font-size: 14px; }
+.btn svg { width: 18px; height: 18px; flex: none; }
 
-/* hero */
-.hero { position: relative; padding: 96px 0 40px; text-align: center; }
-.hero::before {
-  content: ''; position: absolute; inset: -40px 0 auto; height: 720px; z-index: -1;
-  background: radial-gradient(50% 55% at 50% 30%, rgba(242, 181, 68, 0.13), transparent 70%);
+/* the opening screen is laid out like a title page in Flick: text on the left, the picture bleeding off the right */
+.title {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 31rem) minmax(0, 1fr); gap: 56px; align-items: center;
+  min-height: min(100svh, 980px); padding: 120px 0 72px var(--gutter);
 }
-.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
-h1 {
-  margin: 18px auto 0; max-width: 15ch;
-  font-size: clamp(42px, 7vw, 84px); line-height: 0.98; font-weight: 800; letter-spacing: -0.045em;
+.title h1 { margin: 0; font-size: clamp(64px, 9vw, 132px); line-height: 0.9; font-weight: 800; letter-spacing: -0.055em; }
+.meta { margin-top: 22px; font-size: 15px; color: var(--text-2); }
+.title .overview { margin: 18px 0 0; color: var(--text-2); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 30px; }
+.mini { display: inline-flex; align-items: center; gap: 12px; margin-left: 8px; font-size: 14px; color: var(--muted); }
+.art { position: relative; }
+.art img { width: 100%; border-radius: 6px 0 0 6px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55); }
+.art figcaption { margin-top: 12px; font-size: 14px; color: var(--faint); }
+
+/* long-form body */
+main { padding: 0 var(--gutter); }
+.prose { max-width: var(--measure); }
+.prose p { margin: 0 0 1.1em; color: var(--text-2); }
+.prose p b { color: var(--text); font-weight: 600; }
+h2 { margin: 0 0 18px; font-size: clamp(28px, 3.2vw, 38px); line-height: 1.1; font-weight: 700; letter-spacing: -0.03em; }
+h3 { margin: 0 0 6px; font-size: 20px; line-height: 1.25; font-weight: 700; letter-spacing: -0.015em; }
+.part { margin-top: 140px; }
+.essay { display: grid; grid-template-columns: minmax(0, 19rem) minmax(0, var(--measure)); gap: 0 72px; align-items: start; }
+.essay h2 { margin-top: -0.12em; }
+.essay > div > p { margin: 0 0 1.1em; color: var(--text-2); }
+.essay > div > p:last-child { margin-bottom: 0; }
+.essay > div > p b { color: var(--text); font-weight: 600; }
+.part.close { margin-top: 72px; }
+code { font: 500 0.88em ui-monospace, 'Cascadia Mono', Consolas, monospace; color: var(--text); }
+
+/* screenshots: black frame, captions set like subtitles in the player */
+figure { margin: 0; }
+.frame { position: relative; background: #000; border-radius: 6px; overflow: hidden; }
+.frame img { width: 100%; }
+.frame figcaption, .frame .cap {
+  position: absolute; left: 50%; bottom: 7%; width: max-content; max-width: 78%;
+  transform: translateX(-50%); text-align: center; pointer-events: none;
 }
-.lede { margin: 26px auto 0; max-width: 46rem; font-size: clamp(17px, 1.6vw, 20px); color: var(--text-2); }
-.cta { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
-.shot {
-  position: relative; border-radius: 14px; overflow: hidden;
-  border: 1px solid var(--line); background: var(--surface);
-  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.4);
+.sub {
+  display: inline; padding: 0.12em 0.45em;
+  background: rgba(0, 0, 0, 0.62); color: #fff;
+  font-size: clamp(14px, 1.25vw, 19px); font-weight: 500; line-height: 1.55;
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
 }
-.hero .shot { margin-top: 64px; }
-.shot img, .shot video { width: 100%; height: auto; }
+.wide { margin: 48px calc(var(--gutter) * -1) 0; }
+.wide .frame { border-radius: 0; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 48px; }
+.side { display: grid; grid-template-columns: minmax(0, var(--measure)) minmax(0, 1fr); gap: 56px; align-items: start; }
+.side .frame { margin-top: 8px; }
 
-/* sections */
-section { padding: 110px 0 0; }
-.kicker { font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-h2 { margin: 12px 0 0; font-size: clamp(30px, 4vw, 46px); line-height: 1.05; font-weight: 800; letter-spacing: -0.035em; max-width: 22ch; }
-h3 { margin: 0; font-size: 24px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; }
-p { margin: 14px 0 0; color: var(--text-2); }
-.intro { max-width: 44rem; }
-
-.reel { margin-top: 44px; }
-
-.feature { display: grid; grid-template-columns: 5fr 7fr; gap: 56px; align-items: center; margin-top: 88px; }
-.feature:nth-of-type(even) { grid-template-columns: 7fr 5fr; }
-.feature:nth-of-type(even) .text { order: 2; }
-.feature .text p { max-width: 30rem; }
-.feature .tag { display: inline-block; margin-bottom: 12px; font-size: 13px; font-weight: 600; color: var(--accent); }
-
-.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 88px; }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-.card img { aspect-ratio: 16 / 10; object-fit: cover; object-position: left top; width: 100%; border-bottom: 1px solid var(--line); }
-.card .body { padding: 20px 22px 24px; }
-.card h3 { font-size: 19px; }
-.card p { font-size: 15px; margin-top: 8px; }
-
-/* pipeline */
-.pipe { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 44px; }
-.step { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 20px; }
-.step .n { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: 0.08em; }
-.step b { display: block; margin-top: 8px; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
-.step span { display: block; margin-top: 6px; font-size: 14px; color: var(--muted); line-height: 1.5; }
-.step:not(:last-child)::after {
-  content: ''; position: absolute; right: -8px; top: 50%; width: 6px; height: 6px; margin-top: -3px;
-  border-top: 1.5px solid var(--muted); border-right: 1.5px solid var(--muted); transform: rotate(45deg); z-index: 1;
+/* Screenshots open out of letterbox bars as they come up the screen, the same move Fill makes in the player.
+   It follows the scroll position (scroll back and the bars return), and only pictures move, never text. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .frame img {
+      animation: letterbox linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 32%;
+    }
+  }
 }
-.modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
-.mode { border: 1px dashed rgba(238, 234, 227, 0.16); border-radius: 12px; padding: 14px 18px; font-size: 14px; color: var(--muted); }
-.mode b { color: var(--text); font-weight: 600; }
+@keyframes letterbox {
+  from { clip-path: inset(11% 0 11% 0); transform: scale(1.04); }
+  to { clip-path: inset(0); transform: none; }
+}
 
-/* stack */
-.stack { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 44px; }
-.tech { display: flex; gap: 14px; align-items: flex-start; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; transition: border-color .2s, transform .2s; }
-.tech:hover { border-color: rgba(242, 181, 68, 0.35); transform: translateY(-2px); }
-.tech .ico { flex: none; width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; background: var(--raise); font-size: 13px; font-weight: 800; color: var(--accent); letter-spacing: -0.02em; }
-.tech b { display: block; font-size: 15px; font-weight: 700; }
-.tech span { display: block; margin-top: 3px; font-size: 14px; color: var(--muted); line-height: 1.45; }
+/* the reel, in Flick's own player chrome */
+.player { position: relative; background: #000; border-radius: 6px; overflow: hidden; }
+.player video { width: 100%; }
+.controls {
+  position: absolute; inset: auto 0 0; display: flex; align-items: center; gap: 14px;
+  padding: 40px 20px 14px;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.75), transparent);
+  font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text-2);
+  opacity: 0; transition: opacity .25s;
+}
+.player:hover .controls, .player:focus-within .controls, .player.paused .controls { opacity: 1; }
+.controls button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; color: var(--text); cursor: pointer; }
+.controls button:hover { background: var(--fill); }
+.controls button svg { width: 18px; height: 18px; }
+.track { position: relative; flex: 1; height: 18px; cursor: pointer; }
+.track::before, .track i { content: ''; position: absolute; left: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 2px; }
+.track::before { right: 0; background: rgba(238, 234, 227, 0.22); }
+.track i { width: 0; background: var(--accent); }
 
-/* start */
+/* small details, laid out like the episode list */
+.eps { display: grid; gap: 28px; margin-top: 36px; }
+.ep { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 24px; align-items: center; }
+.ep img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; object-position: left top; border-radius: 6px; }
+.ep p { margin: 0; color: var(--text-2); font-size: 16px; }
+
+/* the seeking code */
 pre {
-  margin: 28px 0 0; padding: 22px 24px; overflow-x: auto;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
-  font: 500 15px/1.75 ui-monospace, 'Cascadia Code', Consolas, monospace; color: var(--text-2);
+  margin: 28px 0 0; padding: 22px 26px; overflow-x: auto;
+  background: var(--surface); border-radius: 6px;
+  font: 500 14px/1.7 ui-monospace, 'Cascadia Mono', Consolas, monospace; color: var(--text-2);
+  tab-size: 2;
 }
-pre .c { color: var(--muted); }
-.need { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
-.need div { padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; font-size: 15px; color: var(--text-2); }
-.need b { display: block; color: var(--text); font-size: 15px; }
+pre .file { display: block; margin-bottom: 12px; color: var(--faint); }
+pre .hl { color: var(--accent); }
+table { width: 100%; max-width: var(--measure); margin-top: 28px; border-collapse: collapse; font-size: 16px; }
+td { padding: 10px 16px 10px 0; vertical-align: top; border-top: 1px solid rgba(238, 234, 227, 0.08); color: var(--text-2); }
+td:first-child { color: var(--text); font-weight: 600; white-space: nowrap; }
 
-footer { margin-top: 120px; padding: 36px 0 48px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
-footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: space-between; }
-footer a { text-decoration: none; }
-footer a:hover { color: var(--text); }
+/* built with */
+.stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 48px; max-width: 58rem; margin: 24px 0 0; }
+.stack div { display: grid; grid-template-columns: 11rem 1fr; gap: 16px; padding: 9px 0; font-size: 16px; }
+.stack dt { font-weight: 600; }
+.stack dd { margin: 0; color: var(--muted); }
 
-/* reveal on scroll */
-.rise { opacity: 0; transform: translateY(24px); transition: opacity .7s cubic-bezier(.2,.8,.2,1), transform .7s cubic-bezier(.2,.8,.2,1); }
-.rise.in { opacity: 1; transform: none; }
-@media (prefers-reduced-motion: reduce) {
-  .rise { opacity: 1; transform: none; transition: none; }
-  html { scroll-behavior: auto; }
+/* history */
+.log { margin: 24px 0 0; padding: 0; list-style: none; max-width: 52rem; font-size: 15px; }
+.log li { display: grid; grid-template-columns: 5.5rem 1fr; gap: 16px; padding: 7px 0; color: var(--text-2); }
+.log code { color: var(--faint); font-size: 13px; padding-top: 2px; }
+
+footer { margin-top: 140px; padding: 28px var(--gutter) 110px; font-size: 14px; color: var(--faint); }
+
+/* reading progress drawn as Flick's seek bar */
+.seek {
+  position: fixed; inset: auto 0 0; z-index: 20;
+  display: flex; align-items: center; gap: 18px;
+  padding: 26px var(--gutter) 14px;
+  background: linear-gradient(0deg, rgba(12, 12, 13, 0.92), transparent);
+  font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted);
+  pointer-events: none; opacity: 0; transition: opacity .3s;
 }
+.seek.on { opacity: 1; }
+.seek .track { pointer-events: auto; }
+.seek .knob { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--text); opacity: 0; transition: opacity .15s; }
+.seek .track:hover .knob, .seek .track.drag .knob { opacity: 1; }
 
 @media (max-width: 900px) {
-  nav .links a.hide-s { display: none; }
-  .feature, .feature:nth-of-type(even) { grid-template-columns: 1fr; gap: 26px; margin-top: 64px; }
-  .feature:nth-of-type(even) .text { order: 0; }
-  .cards { grid-template-columns: 1fr; }
-  .pipe { grid-template-columns: 1fr; }
-  .step:not(:last-child)::after { right: 50%; top: auto; bottom: -8px; transform: rotate(135deg); }
-  .modes, .need { grid-template-columns: 1fr; }
-  .hero { padding-top: 64px; }
-  section { padding-top: 80px; }
+  body { font-size: 17px; }
+  .bar nav { display: none; }
+  .title { grid-template-columns: minmax(0, 1fr); gap: 40px; padding-top: 104px; min-height: 0; }
+  .title > :first-child { padding-right: var(--gutter); }
+  .part { margin-top: 96px; }
+  .pair, .side, .essay { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .stack { grid-template-columns: minmax(0, 1fr); }
+  .stack div { grid-template-columns: 9rem 1fr; }
+  .ep { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  /* captions under the picture on small screens, so they don't cover it */
+  .frame figcaption { position: static; transform: none; max-width: none; width: auto; padding: 10px 2px 0; text-align: left; background: var(--bg); }
+  .frame figcaption .sub { background: none; padding: 0; color: var(--muted); font-size: 14px; }
+  .seek { padding-bottom: 10px; }
 }
 </style>
 </head>
 <body>
 
-<nav>
-  <div class="wrap">
-    <a class="brand" href="#top"><img src="assets/icon.png" alt="">Flick</a>
-    <div class="links">
-      <a class="hide-s" href="#features">Features</a>
-      <a class="hide-s" href="#playback">Playback</a>
-      <a class="hide-s" href="#stack">Stack</a>
-    </div>
-    <a class="btn" href="https://github.com/shreywy/flick">
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
-      GitHub
-    </a>
-  </div>
-</nav>
-
-<header class="hero" id="top">
-  <div class="wrap">
-    <div class="eyebrow">Windows desktop app · open source</div>
-    <h1>A proper player for the films on your drive.</h1>
-    <p class="lede">Flick reads your Movies and TV Shows folders, fetches the artwork, sorts new downloads and plays nearly any file, with seeking that lands on the exact second. Open it, watch something, close it. No server, no account.</p>
-    <div class="cta">
-      <a class="btn primary" href="https://github.com/shreywy/flick">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
-        View the code
-      </a>
-      <a class="btn" href="#reel">See it move</a>
-    </div>
-    <div class="shot rise"><img src="assets/home.jpg" alt="Flick's home screen: a Mandalorian banner above a Continue watching row" width="1920" height="777"></div>
-  </div>
+<header class="bar" id="bar">
+  <a class="wordmark" href="#top">Flick</a>
+  <nav aria-label="Sections">
+    <a href="#reel">Reel</a>
+    <a href="#seeking">Seeking</a>
+    <a href="#built">Built with</a>
+  </nav>
+  <a class="gh" href="https://github.com/shreywy/flick">Source on GitHub</a>
 </header>
 
-<section id="reel">
-  <div class="wrap">
-    <div class="kicker">Motion</div>
-    <h2>The card you click becomes the player.</h2>
-    <p class="intro">Picking something flies its thumbnail to the middle of the screen and opens the player out of it. Going back runs the same flight in reverse and drops it into its slot. Play buttons grow straight out to the edges. All of it is the browser's View Transitions API, so the page underneath is the real one, not a copy.</p>
-    <div class="shot reel rise">
-      <video src="assets/reel.mp4" poster="assets/reel-poster.jpg" autoplay muted loop playsinline width="1720" height="696" aria-label="Screen recording of opening an episode, going back, and playing a film"></video>
+<div class="title" id="top">
+  <div>
+    <h1>Flick</h1>
+    <div class="meta">2026 · Windows · Electron, React, TypeScript · Open source</div>
+    <p class="overview">A desktop app for the films and shows on my own drive. It sorts new downloads into place, pulls artwork from TMDB, and plays nearly any file with seeking that lands on the exact second. You open it, watch something, close it.</p>
+    <div class="actions">
+      <a class="btn primary" href="#reel" id="play-reel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5v17l14.5-8.5z" fill="currentColor"/></svg>
+        Play the reel
+      </a>
+      <a class="btn" href="https://github.com/shreywy/flick">Source</a>
+      <span class="mini" id="read-time">5m read</span>
     </div>
   </div>
-</section>
+  <figure class="art">
+    <img src="assets/home.jpg" alt="Flick's home screen, a Mandalorian banner above a Continue watching row" width="1920" height="777">
+  </figure>
+</div>
 
-<section id="features">
-  <div class="wrap">
-    <div class="kicker">Features</div>
-    <h2>Everything a streaming app does, for files you already have.</h2>
+<main>
 
-    <div class="feature rise">
-      <div class="text">
-        <span class="tag">Library</span>
-        <h3>Real artwork, saved next to the files</h3>
-        <p>Posters, backdrops, title logos, cast and episode stills come from TMDB and are written into each title's folder, so they're fetched once and show up in other players too. Marvel, Star Wars and anime collections are built from the metadata.</p>
+  <section class="part close essay">
+    <h2>Why I made it</h2>
+    <div>
+    <p>I keep films and shows in a folder on a second drive. Kodi played them, but I never got on with it, and Plex wants a server running in the background. I wanted the streaming-app experience, artwork and Continue watching and a decent player, as a program I open and close.</p>
+    <p>So Flick is that. It's built around my setup, a 3440×1440 ultrawide and a library that grows by downloads landing in one folder, but nothing in it is specific to my machine.</p>
       </div>
-      <div class="shot"><img src="assets/show.jpg" alt="The Mandalorian's page with its season two episodes" loading="lazy" width="1920" height="777"></div>
+  </section>
+
+  <section class="part" id="reel">
+    <div class="essay" style="margin-bottom: 48px">
+      <h2>Cards turn into the player</h2>
+      <div>
+        <p>Clicking a thumbnail flies it to the middle of the screen and opens the player out of it. Going back runs the same flight in reverse and drops it into its slot in the row. Play buttons grow straight out to the edges instead, because a button has no picture to fly.</p>
+        <p>It's the browser's View Transitions API, so what you see underneath is the real page. Scroll or click while it's moving and it finishes early and gets out of the way.</p>
+      </div>
     </div>
-
-    <div class="feature rise">
-      <div class="text">
-        <span class="tag">Sorting</span>
-        <h3>New downloads put themselves away</h3>
-        <p>Anything that lands in the downloads folder is renamed, moved into Movies or TV Shows, and given art and an English subtitle when Flick opens. Files still being written are left alone until they stop changing, and names it can't read wait in Settings with a Fix match button.</p>
+    <div class="player paused" id="player">
+      <video id="reel-video" src="assets/reel.mp4" poster="assets/reel-poster.jpg" muted loop playsinline preload="metadata" width="1720" height="696"></video>
+      <div class="controls">
+        <button type="button" id="reel-toggle" aria-label="Play">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path id="reel-icon" d="M6 3.5v17l14.5-8.5z" fill="currentColor"/></svg>
+        </button>
+        <div class="track" id="reel-track" role="slider" tabindex="0" aria-label="Seek the reel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+        <span id="reel-time">0:00 / 0:07</span>
       </div>
-      <div class="shot"><img src="assets/rows.jpg" alt="Rows of posters: Recently added, Marvel and Star Wars" loading="lazy" width="1920" height="777"></div>
     </div>
+  </section>
 
-    <div class="feature rise">
-      <div class="text">
-        <span class="tag">Player</span>
-        <h3>Plays nearly anything and seeks exactly</h3>
-        <p>MP4s with AAC audio play as they are. Everything else goes through ffmpeg: the video is copied untouched and DTS, AC3, TrueHD or 5.1 Opus audio is converted on the fly. Styled anime subtitles render through libass, the engine mpv uses.</p>
+  <section class="part essay">
+    <h2>The library looks after itself</h2>
+    <div>
+    <p>Flick reads a <code>Movies</code> and a <code>TV Shows</code> folder. Posters, backdrops, title logos, cast and episode stills come from TMDB and get written into each title's folder, so they're fetched once and other players can use them too.</p>
+    <p>Anything that lands in the downloads folder is renamed, moved into the right place, and given artwork and an English subtitle the next time Flick opens. Files that are still being written are left alone until they stop changing. If a name can't be read, it waits in Settings with a <b>Fix match</b> button rather than being guessed at.</p>
       </div>
-      <div class="shot"><img src="assets/player.jpg" alt="Weathering with You playing with styled subtitles" loading="lazy" width="1920" height="777"></div>
+  </section>
+  <figure class="wide">
+    <div class="frame">
+      <img src="assets/show.jpg" alt="The Mandalorian's page with season two's episodes" loading="lazy" width="1920" height="777">
+      <figcaption><span class="sub">Every picture here was fetched once and saved next to the episode it belongs to.</span></figcaption>
     </div>
+  </figure>
 
-    <div class="feature rise">
-      <div class="text">
-        <span class="tag">Subtitles</span>
-        <h3>Every part of the subtitles is adjustable</h3>
-        <p>Size by the pixel, font, text and background colour, opacity, outline, shadow, height and delay, all changed live over the film. Missing subtitles can be searched for and downloaded from OpenSubtitles or SubDL without leaving the player.</p>
+  <section class="part essay">
+    <h2>A player that takes whatever you give it</h2>
+    <div>
+    <p>MP4s with AAC audio play as they are. Anything else, an MKV with DTS or TrueHD, 5.1 Opus, a 4K HEVC remux, goes through ffmpeg: the video is copied untouched and only the audio is converted. Styled anime subtitles render through libass, the same library mpv uses, so signs and karaoke come out the way they were made.</p>
+    <p>Subtitle size is set by the pixel, and the font, colours, background, outline, shadow, height and delay can all be changed while the film plays. If a file has none, Flick searches OpenSubtitles or SubDL for that file without leaving the player.</p>
       </div>
-      <div class="shot"><img src="assets/subtitle-style.jpg" alt="Subtitle style menu open over Ant-Man" loading="lazy" width="1920" height="777"></div>
+  </section>
+  <div class="pair">
+    <figure class="frame">
+      <img src="assets/player.jpg" alt="Weathering with You playing with styled subtitles" loading="lazy" width="1920" height="777">
+    </figure>
+    <figure class="frame">
+      <img src="assets/subtitle-style.jpg" alt="The subtitle style menu over Ant-Man" loading="lazy" width="1920" height="777">
+    </figure>
+  </div>
+
+  <section class="part">
+    <div class="side">
+      <div class="prose">
+        <h2>Skip intro, found by listening</h2>
+        <p>Most of my episodes don't have chapter markers, so Flick works the intro out from the audio. It fingerprints the first six minutes of an episode and of the episodes either side with Chromaprint, then slides the fingerprints past each other looking for the longest stretch that matches.</p>
+        <p>An intro only counts when both neighbours agree on it. Otherwise a "previously on" recap, which contains last week's episode, would match last week and be taken for the intro. Credits work the same way from the last seven minutes, and when they start the next episode card comes up.</p>
+      </div>
+      <figure class="frame">
+        <img src="assets/skip-intro.jpg" alt="A Skip intro button over the Lucasfilm logo" loading="lazy" width="1920" height="777">
+        <figcaption><span class="sub">S2 E3, intro at 1:13 to 1:32. Nobody marked that.</span></figcaption>
+      </figure>
     </div>
+  </section>
 
-    <div class="feature rise">
-      <div class="text">
-        <span class="tag">Skip intro</span>
-        <h3>Finds intros and credits by listening</h3>
-        <p>Flick fingerprints the audio of an episode and the episodes either side of it with Chromaprint, then looks for the longest stretch they share near the start and the end. An intro only counts when both neighbours agree, so last week's recap isn't mistaken for one. When the credits start, the next episode card comes up.</p>
+  <section class="part essay">
+    <h2>Built on a 21:9 screen</h2>
+    <div>
+    <p>Most films on an ultrawide end up with black bars on all four sides: the bars burned into the file, plus the ones the screen adds. <b>Fill</b> finds the burned-in bars with ffmpeg's <code>cropdetect</code> and scales until the picture meets the edges, without stretching it. Ctrl + scroll zooms by hand, and the choice is remembered per film.</p>
+    <p>The screenshots on this page open out of letterbox bars as you scroll for the same reason.</p>
       </div>
-      <div class="shot"><img src="assets/skip-intro.jpg" alt="Skip intro button over the Lucasfilm logo" loading="lazy" width="1920" height="777"></div>
+  </section>
+  <figure class="wide">
+    <div class="frame">
+      <img src="assets/picture.jpg" alt="The Picture menu: Fit, Fill screen and Zoom" loading="lazy" width="1920" height="777">
     </div>
+  </figure>
 
-    <div class="feature rise">
-      <div class="text">
-        <span class="tag">Ultrawide</span>
-        <h3>Made on a 21:9 screen</h3>
-        <p>Fill finds the black bars burned into a film with ffmpeg's cropdetect and scales until the picture meets the edges, without stretching it. Ctrl + scroll zooms by hand, and the choice is remembered per film.</p>
+  <section class="part">
+    <h2>Smaller things</h2>
+    <div class="eps">
+      <div class="ep">
+        <img src="assets/seek-preview.jpg" alt="A preview frame above the seek bar" loading="lazy">
+        <div><h3>Seek previews</h3><p>Hovering the seek bar shows the frame at that point. The thumbnails are cut from keyframes in one ffmpeg pass the first time a file plays, then cached.</p></div>
       </div>
-      <div class="shot"><img src="assets/picture.jpg" alt="Picture menu with Fit, Fill screen and Zoom" loading="lazy" width="1920" height="777"></div>
-    </div>
-
-    <div class="cards">
-      <div class="card rise">
-        <img src="assets/seek-preview.jpg" alt="Seek bar preview frame" loading="lazy">
-        <div class="body"><h3>Seek previews</h3><p>Thumbnails along the seek bar, cut from keyframes in a single ffmpeg pass and cached.</p></div>
-      </div>
-      <div class="card rise">
+      <div class="ep">
         <img src="assets/search.jpg" alt="Search results for star" loading="lazy">
-        <div class="body"><h3>Search as you type</h3><p>Matches titles, cast, directors and collections, with the matching part highlighted.</p></div>
+        <div><h3>Search as you type</h3><p>Titles, cast, directors and collections. Typing "mcconaughey" finds Interstellar.</p></div>
       </div>
-      <div class="card rise">
-        <img src="assets/context-menu.jpg" alt="Right-click menu on a Continue watching card" loading="lazy">
-        <div class="body"><h3>A menu for what you clicked</h3><p>Right-click a card to play from the start, mark it watched, or take it out of Continue watching, with Undo.</p></div>
+      <div class="ep">
+        <img src="assets/context-menu.jpg" alt="A right-click menu on a Continue watching card" loading="lazy">
+        <div><h3>A right-click menu that knows what you clicked</h3><p>Play from the start, mark as watched, or take something out of Continue watching, with Undo. It comes back on its own if you watch it again.</p></div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section id="playback">
-  <div class="wrap">
-    <div class="kicker">How playback works</div>
-    <h2>Exact seeking on a stream that's being converted.</h2>
-    <p class="intro">A piped ffmpeg stream can't normally be seeked: the browser sees a file with no length that starts at zero. Flick starts ffmpeg at the nearest keyframe, appends the fragments to a Media Source buffer placed at that point in the film, and lets the video element's own clock do the rest. Seeks inside what's buffered are instant; seeks outside start a new stream in about a second and a half.</p>
-    <div class="pipe rise">
-      <div class="step"><div class="n">01</div><b>Probe</b><span>ffprobe reads codecs, tracks and duration, cached per file</span></div>
-      <div class="step"><div class="n">02</div><b>Keyframe</b><span>the nearest keyframe before the seek point</span></div>
-      <div class="step"><div class="n">03</div><b>ffmpeg</b><span>fragmented MP4 from that keyframe, video copied</span></div>
-      <div class="step"><div class="n">04</div><b>Local server</b><span>127.0.0.1 only, every request carries a random token</span></div>
-      <div class="step"><div class="n">05</div><b>Media Source</b><span>appended at the keyframe's time, 90 seconds ahead at most</span></div>
+  <section class="part essay" id="seeking">
+      <h2>How seeking works on a stream that's being converted</h2>
+    <div>
+      <p>The usual way to play a file the browser can't decode is to pipe ffmpeg's output into a <code>&lt;video&gt;</code>. That plays, but it can't seek: the browser sees a stream of unknown length that starts at zero, wherever in the film it actually starts.</p>
+      <p>Flick asks ffprobe for the keyframe just before the point you picked, starts ffmpeg there, and appends the fragments to a Media Source buffer that has been moved to that same point in the film. The video element's clock is then the film's clock, so jumping inside what's buffered is instant and jumping outside it starts a new stream in about a second and a half.</p>
+<pre><span class="file">src/mse.ts</span>// something can slip an append in while we waited; the offset can only change when the buffer is idle
+while (this.sb.updating) await this.idle()
+if (gen !== this.gen) return
+<span class="hl">this.sb.timestampOffset = offset</span>
+const ctrl = (this.ctrl = new AbortController())</pre>
+    <table>
+      <tr><td>Direct</td><td>MP4 with AAC audio, served from disk with range requests</td></tr>
+      <tr><td>Remux</td><td>Playable codecs in another container, repackaged as fragmented MP4 without re-encoding</td></tr>
+      <tr><td>Convert</td><td>Video copied, DTS, AC3, TrueHD or 5.1 Opus audio converted to AAC</td></tr>
+    </table>
     </div>
-    <div class="modes rise">
-      <div class="mode"><b>Direct</b> · MP4 with AAC, served straight from disk with range requests</div>
-      <div class="mode"><b>Remux</b> · MKV with playable codecs, repackaged without re-encoding</div>
-      <div class="mode"><b>Convert</b> · video copied, DTS / AC3 / TrueHD / 5.1 Opus audio to AAC</div>
-    </div>
-  </div>
-</section>
+  </section>
 
-<section id="stack">
-  <div class="wrap">
-    <div class="kicker">Stack</div>
-    <h2>What it's built with.</h2>
-    <div class="stack">
-      <div class="tech rise"><div class="ico">El</div><div><b>Electron 44</b><span>Frameless window with its own controls, single instance</span></div></div>
-      <div class="tech rise"><div class="ico">Re</div><div><b>React 19 + TypeScript</b><span>Strict mode across the main process and the interface</span></div></div>
-      <div class="tech rise"><div class="ico">Vi</div><div><b>Vite + esbuild</b><span>Renderer and main process builds in under two seconds</span></div></div>
-      <div class="tech rise"><div class="ico">Sq</div><div><b>node:sqlite</b><span>Progress, sorting queue and settings in one file, no native modules</span></div></div>
-      <div class="tech rise"><div class="ico">ff</div><div><b>ffmpeg / ffprobe</b><span>Remuxing, audio conversion, crop detection, preview sprites</span></div></div>
-      <div class="tech rise"><div class="ico">MS</div><div><b>Media Source Extensions</b><span>Exact seeking on a stream converted while it plays</span></div></div>
-      <div class="tech rise"><div class="ico">Cp</div><div><b>Chromaprint</b><span>Audio fingerprints for intro and credits detection</span></div></div>
-      <div class="tech rise"><div class="ico">as</div><div><b>JASSUB</b><span>libass compiled to WebAssembly for styled subtitles</span></div></div>
-      <div class="tech rise"><div class="ico">VT</div><div><b>View Transitions API</b><span>The card-to-player animations, with input passed through mid-flight</span></div></div>
-      <div class="tech rise"><div class="ico">TM</div><div><b>TMDB, OpenSubtitles, SubDL</b><span>Metadata, artwork and subtitle downloads</span></div></div>
-      <div class="tech rise"><div class="ico">Pw</div><div><b>Vitest + Playwright</b><span>34 unit tests and end-to-end runs against the packaged app</span></div></div>
-      <div class="tech rise"><div class="ico">ss</div><div><b>safeStorage</b><span>API keys encrypted with the Windows user's credentials</span></div></div>
-    </div>
-  </div>
-</section>
+  <section class="part" id="built">
+    <h2>Built with</h2>
+    <dl class="stack">
+      <div><dt>Electron 44</dt><dd>frameless window with its own controls</dd></div>
+      <div><dt>React 19, TypeScript</dt><dd>strict, no state library, one stylesheet</dd></div>
+      <div><dt>Vite, esbuild</dt><dd>both processes build in under two seconds</dd></div>
+      <div><dt>node:sqlite</dt><dd>progress, settings and the sort queue in one file</dd></div>
+      <div><dt>ffmpeg, ffprobe</dt><dd>remux, audio conversion, crop detection, previews</dd></div>
+      <div><dt>Media Source</dt><dd>exact seeking on a converted stream</dd></div>
+      <div><dt>Chromaprint</dt><dd>audio fingerprints for intros and credits</dd></div>
+      <div><dt>JASSUB</dt><dd>libass in WebAssembly for styled subtitles</dd></div>
+      <div><dt>View Transitions</dt><dd>card-to-player animations</dd></div>
+      <div><dt>TMDB, OpenSubtitles, SubDL</dt><dd>artwork, metadata and subtitles</dd></div>
+      <div><dt>Vitest, Playwright</dt><dd>34 unit tests, end-to-end runs on the built app</dd></div>
+      <div><dt>safeStorage</dt><dd>API keys encrypted to the Windows user</dd></div>
+    </dl>
+  </section>
 
-<section id="start">
-  <div class="wrap">
-    <div class="kicker">Run it</div>
-    <h2>Three commands.</h2>
-<pre><span class="c"># Node 24 and ffmpeg (a build with Chromaprint, like gyan.dev's full build)</span>
-git clone https://github.com/shreywy/flick
-cd flick && npm install
-npm start          <span class="c"># or npm run dist for release\win-unpacked\Flick.exe</span></pre>
-    <div class="need">
-      <div><b>A media folder</b>Movies, TV Shows, and a downloads folder Flick sorts from.</div>
-      <div><b>A TMDB key</b>Free from themoviedb.org. Asked for on first launch.</div>
-      <div><b>A subtitle key</b>Optional. OpenSubtitles or SubDL, for downloads.</div>
+  <section class="part essay">
+    <h2>Run it</h2>
+    <div>
+      <p style="margin-top:0">You need Windows, Node 24, and an ffmpeg build that includes Chromaprint (the full build from gyan.dev does). The first launch asks for your media folder and a free TMDB key.</p>
+<pre>git clone https://github.com/shreywy/flick
+cd flick
+npm install
+npm start</pre>
     </div>
-  </div>
-</section>
+  </section>
+
+  <section class="part">
+    <h2>History</h2>
+    <p class="prose" style="color: var(--text-2); margin: 0">The whole thing went from design notes to this page in one day, October 3, 2026. The commits, oldest at the bottom:</p>
+    <ol class="log" reversed>
+      <li><code>7b6e1ee</code><span>Deploy the project page with GitHub Pages</span></li>
+      <li><code>05d4b1e</code><span>Project page, README with screenshots, styled subtitles clear the controls</span></li>
+      <li><code>2569aa2</code><span>Right-click menu everywhere; film pages return into the Play button</span></li>
+      <li><code>bb699ff</code><span>Input mid-animation finishes it quickly, clicks during transitions reach the page, double Back is one step</span></li>
+      <li><code>275b1fc</code><span>Play buttons grow into the player; a show's Play flies from its episode card</span></li>
+      <li><code>02c713a</code><span>Resume flies from its card, one-move return, eased shift + wheel rows</span></li>
+      <li><code>13d01d4</code><span>Player flies back into its card, frosted header, faded carousel edges</span></li>
+      <li><code>5226f1c</code><span>Skip intro and credits, resume paused, page transitions, own window buttons</span></li>
+      <li><code>394ae48</code><span>Build Flick: library, sorting queue, TMDB art, subtitles, player</span></li>
+      <li><code>2441e9d</code><span>Add Flick design spec</span></li>
+    </ol>
+  </section>
+
+</main>
 
 <footer>
-  <div class="wrap">
-    <span>Flick, by <a href="https://github.com/shreywy">Shrey</a>. Uses the TMDB API but is not endorsed or certified by TMDB.</span>
-    <a href="https://github.com/shreywy/flick">github.com/shreywy/flick</a>
-  </div>
+  Made by <a href="https://github.com/shreywy">Shrey</a>. Screenshots are of my own library. Flick uses the TMDB API but is not endorsed or certified by TMDB.
 </footer>
 
+<div class="seek" id="seek">
+  <div class="track" id="page-track" role="slider" tabindex="0" aria-label="Page position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i><span class="knob"></span></div>
+  <span id="left">5m left</span>
+</div>
+
 <script>
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
-  }, { rootMargin: '0px 0px -8% 0px' })
-  document.querySelectorAll('.rise').forEach((el) => io.observe(el))
+// Top bar frosts once the page scrolls, like the app's header.
+const bar = document.getElementById('bar')
+
+// Reading position, shown as Flick's seek bar with "m left" like Continue watching. Drag it to move through the page.
+const seek = document.getElementById('seek')
+const pageTrack = document.getElementById('page-track')
+const fill = pageTrack.querySelector('i')
+const knob = pageTrack.querySelector('.knob')
+const left = document.getElementById('left')
+const words = document.querySelector('main').innerText.split(/\s+/).length
+const minutes = Math.max(1, Math.round(words / 220))
+document.getElementById('read-time').textContent = `${minutes}m read`
+const max = () => document.documentElement.scrollHeight - innerHeight
+const update = () => {
+  bar.classList.toggle('solid', scrollY > 40)
+  const f = Math.min(1, Math.max(0, scrollY / max()))
+  fill.style.width = knob.style.left = `${f * 100}%`
+  pageTrack.setAttribute('aria-valuenow', Math.round(f * 100))
+  const m = Math.ceil(minutes * (1 - f))
+  left.textContent = m > 0 ? `${m}m left` : 'Done'
+  seek.classList.toggle('on', scrollY > innerHeight * 0.6)
+}
+addEventListener('scroll', () => requestAnimationFrame(update), { passive: true })
+addEventListener('resize', update)
+update()
+const seekTo = (x) => {
+  const r = pageTrack.getBoundingClientRect()
+  scrollTo({ top: Math.min(1, Math.max(0, (x - r.left) / r.width)) * max() })
+}
+pageTrack.addEventListener('pointerdown', (e) => {
+  pageTrack.setPointerCapture(e.pointerId)
+  pageTrack.classList.add('drag')
+  seekTo(e.clientX)
+  const move = (ev) => seekTo(ev.clientX)
+  pageTrack.addEventListener('pointermove', move)
+  pageTrack.addEventListener('pointerup', () => (pageTrack.removeEventListener('pointermove', move), pageTrack.classList.remove('drag')), { once: true })
+})
+pageTrack.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+    e.preventDefault()
+    scrollBy({ top: (e.key === 'ArrowRight' ? 1 : -1) * innerHeight * 0.8 })
+  }
+})
+
+// The reel: plays while it's on screen, with the player's own controls.
+const player = document.getElementById('player')
+const video = document.getElementById('reel-video')
+const toggle = document.getElementById('reel-toggle')
+const icon = document.getElementById('reel-icon')
+const reelTrack = document.getElementById('reel-track')
+const time = document.getElementById('reel-time')
+const clock = (s) => `0:${String(Math.floor(s)).padStart(2, '0')}`
+const PLAY = 'M6 3.5v17l14.5-8.5z'
+const PAUSE = 'M6 4.5h4v15H6zM14 4.5h4v15h-4z'
+let userPaused = false
+const sync = () => {
+  icon.setAttribute('d', video.paused ? PLAY : PAUSE)
+  toggle.setAttribute('aria-label', video.paused ? 'Play' : 'Pause')
+  player.classList.toggle('paused', video.paused)
+}
+video.addEventListener('play', sync)
+video.addEventListener('pause', sync)
+video.addEventListener('timeupdate', () => {
+  const f = video.duration ? video.currentTime / video.duration : 0
+  reelTrack.querySelector('i').style.width = `${f * 100}%`
+  reelTrack.setAttribute('aria-valuenow', Math.round(f * 100))
+  time.textContent = `${clock(video.currentTime)} / ${clock(video.duration || 7)}`
+})
+toggle.addEventListener('click', () => {
+  userPaused = !video.paused
+  video.paused ? video.play() : video.pause()
+})
+reelTrack.addEventListener('pointerdown', (e) => {
+  const r = reelTrack.getBoundingClientRect()
+  if (video.duration) video.currentTime = ((e.clientX - r.left) / r.width) * video.duration
+})
+reelTrack.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') video.currentTime += 1
+  if (e.key === 'ArrowLeft') video.currentTime -= 1
+})
+new IntersectionObserver(([e]) => {
+  if (e.isIntersecting && !userPaused) video.play().catch(() => {})
+  else if (!e.isIntersecting) video.pause()
+}, { threshold: 0.5 }).observe(video)
+document.getElementById('play-reel').addEventListener('click', () => {
+  userPaused = false
+  video.currentTime = 0
+})
 </script>
 </body>
 </html>
