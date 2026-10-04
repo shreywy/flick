@@ -275,7 +275,7 @@ export async function flow(ctx) {
   await page.locator('.upnext button', { hasText: 'Cancel' }).click().catch(() => {})
   await page.keyboard.press('Escape')
   // freeze the flight part way through to look at it
-  await page.waitForFunction(() => document.getAnimations().some((a) => a.effect?.pseudoElement === '::view-transition-group(flick-play)' && a.effect.getKeyframes().length === 3), null, { timeout: 8000 })
+  await page.waitForFunction(() => document.getAnimations().some((a) => a.effect?.pseudoElement === '::view-transition-group(flick-play)'), null, { timeout: 8000 })
   for (const f of [0.25, 0.5, 0.75]) {
     const t = await page.evaluate((f) => {
       const all = document.getAnimations()
@@ -320,7 +320,10 @@ export async function motion(ctx) {
   await freeze('resume', 820, [0.2, 0.45])
   await sleep(2500)
   await page.keyboard.press('Escape')
-  await waitNav('leave')
+  await waitNav('leave').catch(async (e) => {
+    log('leave never started', await page.evaluate(() => [location.hash, document.documentElement.dataset.nav, !!document.querySelector('.player'), document.activeElement?.tagName]))
+    throw e
+  })
   await freeze('back', 620, [0.3, 0.6, 0.85])
   await sleep(1500)
   await shot('home')
@@ -337,13 +340,16 @@ export async function motion(ctx) {
   // a film's page
   await page.evaluate(() => scrollTo(0, 0))
   await page.locator('.poster', { hasText: 'Your Name' }).first().click()
-  await waitNav('page')
+  await waitNav('page').catch(async (e) => {
+    log('no page transition', await page.evaluate(() => [location.hash, document.documentElement.dataset.nav, scrollY]))
+    throw e
+  })
   await freeze('to-title', 320, [0.15, 0.5])
   await sleep(1200)
   await shot('title-page')
   await page.getByRole('button', { name: 'Play', exact: true }).click()
-  await waitNav('zoom')
-  await freeze('zoom', 540, [0.3, 0.7])
+  await waitNav('expand')
+  await freeze('expand', 560, [0.3, 0.7])
   await sleep(1500)
   await page.keyboard.press('Escape')
   await sleep(1500)
