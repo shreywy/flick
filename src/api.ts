@@ -62,6 +62,7 @@ export const api = {
   fixTitle: (titleId: number, pick: { tmdbId: number; kind: 'movie' | 'show'; title: string; year?: number }) => call<void>('title:fix', titleId, pick),
   setFullscreen: (on: boolean) => call<boolean>('window:fullscreen', on),
   windowState: () => call<{ maximized: boolean; fullscreen: boolean }>('window:state'),
+  edit: (cmd: 'cut' | 'copy' | 'paste' | 'selectAll') => call<void>('edit', cmd),
   minimize: () => call<void>('window:minimize'),
   maximize: () => call<void>('window:maximize'),
   close: () => call<void>('window:close'),

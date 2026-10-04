@@ -1209,6 +1209,12 @@ html[data-nav='leave']::view-transition-old(flick-play) {
 html[data-nav='leave']::view-transition-new(flick-play) {
   animation: 0.26s 0.3s both ease-out vt-in;
 }
+html[data-to='button']::view-transition-old(flick-play) {
+  animation: 0.26s 0.36s both ease-in vt-out;
+}
+html[data-to='button']::view-transition-new(flick-play) {
+  animation: 0.12s 0.5s both vt-in;
+}
 /* playing from a Play button: the button grows to fill the screen, the player shows through as it does */
 html[data-nav='expand']::view-transition-old(root) {
   animation: 0.56s both vt-page-out;
@@ -1280,5 +1286,86 @@ html[data-nav='zoom']::view-transition-new(flick-play) {
   ::view-transition-new(*) {
     animation-duration: 0.01s !important;
     animation-delay: 0s !important;
+  }
+}
+
+/* ---------- right-click menu ---------- */
+.cmenu {
+  position: fixed;
+  z-index: 100;
+  min-width: 15rem;
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  background: rgba(24, 24, 26, 0.9);
+  backdrop-filter: blur(22px) saturate(1.4);
+  border: 1px solid rgba(238, 234, 227, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  font-size: 0.86rem;
+  animation: menu-pop 0.14s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.cmenu button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2.4rem;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  white-space: nowrap;
+}
+.cmenu button:hover,
+.cmenu button:focus-visible {
+  background: var(--fill);
+  outline: none;
+}
+.cmenu button.danger {
+  color: #f0a39a;
+}
+.cmenu .hint {
+  font-size: 0.76rem;
+  color: var(--faint);
+}
+.cmenu .sep {
+  height: 1px;
+  margin: 0.3rem 0.5rem;
+  background: var(--line);
+}
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 2.4rem;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  padding: 0.65rem 0.7rem 0.65rem 1.2rem;
+  background: rgba(30, 30, 32, 0.94);
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(238, 234, 227, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  font-size: 0.9rem;
+  transform: translateX(-50%);
+  animation: toast-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.toast button {
+  padding: 0.4rem 0.8rem;
+  border: 0;
+  border-radius: 6px;
+  background: var(--fill);
+  color: var(--accent);
+  font-weight: 600;
+}
+.toast button:hover {
+  background: rgba(238, 234, 227, 0.2);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
   }
 }

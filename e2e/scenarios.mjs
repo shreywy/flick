@@ -632,3 +632,95 @@ export async function chaos2(ctx) {
 
   log('ISSUES', issues.length ? '\n  ' + issues.join('\n  ') : 'none')
 }
+
+// Right-click menus, removing from rows with Undo, and a film's return into its Play button.
+export async function menus(ctx) {
+  const { page, shot, sleep, log } = ctx
+  await page.locator('.header').waitFor({ timeout: 30000 })
+  await sleep(1500)
+  const issues = []
+  const check = (label, ok, extra = '') => (log(label, ok ? 'ok' : 'PROBLEM', extra), ok || issues.push(`${label} ${extra}`))
+  const items = () => page.locator('.cmenu [role=menuitem]').allInnerTexts()
+
+  // Continue watching: remove, then undo
+  const card = page.locator('[data-row=resume] .thumb', { hasText: 'Mandalorian' })
+  await card.click({ button: 'right' })
+  await sleep(250)
+  log('card menu', JSON.stringify(await items()))
+  await shot('menu-card')
+  await page.getByRole('menuitem', { name: 'Remove from Continue watching' }).click()
+  await sleep(600)
+  check('removed from continue', (await card.count()) === 0)
+  await shot('toast')
+  await page.locator('.toast button', { hasText: 'Undo' }).click()
+  await sleep(600)
+  check('undo brings it back', (await card.count()) === 1)
+
+  // Recently added: remove, then undo
+  const poster = page.locator('[data-row=recent] .poster', { hasText: 'Your Name' })
+  await poster.scrollIntoViewIfNeeded()
+  await poster.click({ button: 'right' })
+  await sleep(250)
+  log('poster menu', JSON.stringify(await items()))
+  await page.getByRole('menuitem', { name: 'Remove from Recently added' }).click()
+  await sleep(600)
+  check('removed from recent', (await poster.count()) === 0)
+  await page.locator('.toast button', { hasText: 'Undo' }).click()
+  await sleep(600)
+  check('undo recent', (await poster.count()) === 1)
+
+  // empty space, then Esc closes
+  await page.evaluate(() => scrollTo(0, 0))
+  await sleep(300)
+  await page.mouse.click(1500, 300, { button: 'right' })
+  await sleep(250)
+  log('page menu', JSON.stringify(await items()))
+  await shot('menu-page')
+  await page.keyboard.press('Escape')
+  await sleep(200)
+  check('esc closes', (await page.locator('.cmenu').count()) === 0)
+
+  // in the player: Esc closes the menu and stays in the player
+  const lib = await page.evaluate(() => window.flick.invoke('library:get'))
+  const mando = lib.titles.find((x) => x.name.includes('Mandalorian'))
+  await page.evaluate((id) => (location.hash = `#/title/${id}`), mando.id)
+  await sleep(1500)
+  await page.locator('.ep').nth(4).click({ button: 'right' })
+  await sleep(250)
+  log('episode menu', JSON.stringify(await items()))
+  await page.getByRole('menuitem', { name: /^(Play|Resume)$/ }).click()
+  await sleep(3500)
+  await page.mouse.click(1500, 600, { button: 'right' })
+  await sleep(250)
+  log('player menu', JSON.stringify(await items()))
+  await shot('menu-player')
+  await page.keyboard.press('Escape')
+  await sleep(400)
+  check('esc in player menu stays', (await page.evaluate(() => location.hash)).startsWith('#/play/'))
+  await page.keyboard.press('Escape')
+  await sleep(1800)
+
+  // a film: back shrinks into the Play button, the banner stays put
+  const yn = lib.titles.find((x) => x.name.startsWith('Your Name'))
+  await page.evaluate((id) => (location.hash = `#/title/${id}`), yn.id)
+  await sleep(1500)
+  await page.locator('.title-hero .btn.primary').click()
+  await sleep(3000)
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(() => document.getAnimations().some((a) => String(a.effect?.pseudoElement ?? '') === '::view-transition-group(flick-play)'), null, { timeout: 8000 })
+  for (const f of [0.4, 0.8]) {
+    await page.evaluate((t) => document.getAnimations().forEach((a) => String(a.effect?.pseudoElement ?? '').startsWith('::view-transition') && (a.pause(), (a.currentTime = t))), f * 620)
+    await shot(`film-back-${f * 100}`)
+  }
+  await page.evaluate(() => document.getAnimations().forEach((a) => a.play()))
+  await sleep(1500)
+
+  // text box menu
+  await page.evaluate(() => (location.hash = '#/search'))
+  await sleep(700)
+  await page.getByLabel('Search your library').click({ button: 'right' })
+  await sleep(250)
+  log('input menu', JSON.stringify(await items()))
+  await page.keyboard.press('Escape')
+  log('ISSUES', issues.length ? '\n  ' + issues.join('\n  ') : 'none')
+}

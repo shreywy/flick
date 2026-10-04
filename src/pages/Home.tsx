@@ -7,8 +7,12 @@ import { continueWatching, epTag, timeLeft, type Resume } from '../lib'
 
 export default function Home() {
   const { lib, settings } = useApp()
-  const resume = useMemo(() => continueWatching(lib), [lib])
-  const recent = useMemo(() => [...lib.titles].sort((a, b) => b.added - a.added).slice(0, 24), [lib])
+  // items taken out with the right-click menu; a title comes back to Continue watching once it's watched again
+  const resume = useMemo(() => continueWatching(lib).filter((r) => !((settings.hiddenResume?.[r.title.id] ?? 0) >= r.updated)), [lib, settings.hiddenResume])
+  const recent = useMemo(
+    () => lib.titles.filter((t) => !settings.hiddenRecent?.includes(t.id)).sort((a, b) => b.added - a.added).slice(0, 24),
+    [lib, settings.hiddenRecent],
+  )
   const shows = lib.titles.filter((t) => t.kind === 'show').sort((a, b) => a.name.localeCompare(b.name))
 
   if (!lib.titles.length) {
@@ -30,7 +34,7 @@ export default function Home() {
 
   return (
     <main className="page">
-      <section className="hero" data-file={heroFile} data-title={heroTitle.id}>
+      <section className="hero">
         <Img src={heroTitle.backdrop} className="hero-art" />
         <div className="hero-body">
           {heroTitle.logo ? (
@@ -43,6 +47,8 @@ export default function Home() {
           <div className="actions">
             <button
               className="btn primary"
+              data-file={heroFile}
+              data-title={heroTitle.id}
               onClick={(e) => {
                 if (!heroFile) return go(`#/title/${heroTitle.id}`)
                 // resuming: it's in Continue watching, so fly from that card when it's on screen
@@ -70,7 +76,7 @@ export default function Home() {
       </section>
 
       {resume.length > 0 && (
-        <Row title="Continue watching">
+        <Row title="Continue watching" id="resume">
           {resume.map((r) => (
             <ThumbCard
               key={r.fileId}
@@ -86,7 +92,7 @@ export default function Home() {
         </Row>
       )}
 
-      <Row title="Recently added">
+      <Row title="Recently added" id="recent">
         {recent.map((t) => (
           <PosterCard key={t.id} t={t} />
         ))}

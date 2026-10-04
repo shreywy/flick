@@ -77,7 +77,7 @@ export function ThumbCard({
   )
 }
 
-export function Row({ title, children }: { title: string; children: ReactNode }) {
+export function Row({ title, id, children }: { title: string; id?: string; children: ReactNode }) {
   const track = useRef<HTMLDivElement>(null)
   const [edge, setEdge] = useState({ l: false, r: false })
   // arrows only when there's more to see that way
@@ -129,7 +129,7 @@ export function Row({ title, children }: { title: string; children: ReactNode })
   }, [])
   const scroll = (dir: number) => glide.current(dir * track.current!.clientWidth * 0.8)
   return (
-    <section className={`row${edge.l ? ' more-l' : ''}${edge.r ? ' more-r' : ''}`}>
+    <section className={`row${edge.l ? ' more-l' : ''}${edge.r ? ' more-r' : ''}`} data-row={id}>
       <h2>{title}</h2>
       {edge.l && (
         <button className="row-arrow left" aria-label={`Scroll ${title} left`} onClick={() => scroll(-1)}>

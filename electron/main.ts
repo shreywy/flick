@@ -55,6 +55,8 @@ const DEFAULTS: FullSettings = {
   ffmpegDir: fs.existsSync('C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe') ? 'C:\\Program Files\\ffmpeg\\bin' : '',
   subStyle: DEFAULT_SUB_STYLE,
   sortAuto: true,
+  hiddenResume: {},
+  hiddenRecent: [],
   setupDone: false,
 }
 
@@ -393,6 +395,9 @@ function registerIpc() {
     if (E2E || !win || win.isFullScreen() === on) return false
     win.setFullScreen(on)
     return true
+  })
+  h('edit', (cmd: string) => {
+    if (win && (['cut', 'copy', 'paste', 'selectAll'] as const).includes(cmd as 'cut')) win.webContents[cmd as 'cut' | 'copy' | 'paste' | 'selectAll']()
   })
   h('window:minimize', () => win?.minimize())
   h('window:maximize', () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()))

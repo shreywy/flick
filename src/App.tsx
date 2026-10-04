@@ -10,6 +10,7 @@ import Player from './pages/Player'
 import SearchPage from './pages/Search'
 import SettingsPage from './pages/Settings'
 import TitlePage from './pages/TitlePage'
+import ContextMenu from './ContextMenu'
 
 interface Ctx {
   lib: Library
@@ -129,9 +130,9 @@ function useHash() {
         if (leaving) {
           // land back on the card for what was playing, or failing that one for the same show, when it's on screen
           const id = prev.split('/')[2]
-          const banner = (c: Element) => (c.matches('.hero, .title-hero') ? 1 : 0)
+          // a picture card first; a Play button only when there's no card (banners never move)
+          const banner = (c: Element) => (c.querySelector('img') ? 0 : 1)
           const cards = [...document.querySelectorAll(`[data-file="${id}"]`), ...(titleId ? document.querySelectorAll(`[data-title="${titleId}"]`) : [])]
-          // a card first, the page's big banner only when there's no card
           cards.sort((a, b) => banner(a) - banner(b))
           for (const c of cards) {
             const img = c.querySelector('img') ?? c
@@ -139,6 +140,8 @@ function useHash() {
             if (img instanceof HTMLElement && onScreen(r)) {
               img.style.viewTransitionName = 'flick-play'
               to = r
+              // landing on a Play button: show the button only once it's its own size, never blown up
+              if (!c.querySelector('img')) document.documentElement.dataset.to = 'button'
               break
             }
           }
@@ -197,6 +200,7 @@ function useHash() {
         for (const t of inputs) removeEventListener(t, hurry, { capture: true })
         setTimeout(() => removeEventListener('click', passClick, true))
         delete document.documentElement.dataset.nav
+        delete document.documentElement.dataset.to
         document.querySelectorAll<HTMLElement>('[style*="view-transition-name"]').forEach((el) => (el.style.viewTransitionName = ''))
       })
     }
@@ -339,6 +343,7 @@ export default function App() {
       {showHeader && <Header route={route || ''} />}
       {page}
       {route !== 'play' && <WindowControls />}
+      <ContextMenu />
     </AppCtx.Provider>
   )
 }

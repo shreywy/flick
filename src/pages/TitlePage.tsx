@@ -86,7 +86,7 @@ function MoviePage({ t }: { t: Title }) {
   return (
     <main className="page">
       <BackButton />
-      <section className="title-hero" data-file={t.fileId} data-title={t.id}>
+      <section className="title-hero">
         <Img src={t.backdrop} className="hero-art" />
         <div className="title-body">
           {t.logo ? <Img src={t.logo} className="hero-logo" alt={t.name} /> : <h1 className={`hero-title${t.name.length > 18 ? ' long' : ''}`}>{t.name}</h1>}
@@ -112,7 +112,7 @@ function MoviePage({ t }: { t: Title }) {
             </div>
           )}
           <div className="actions">
-            <button className="btn primary" onClick={(e) => play(t.fileId!, e.currentTarget)}>
+            <button className="btn primary" data-file={t.fileId} data-title={t.id} onClick={(e) => play(t.fileId!, e.currentTarget)}>
               <Play />
               {started ? 'Resume' : 'Play'}
             </button>
@@ -172,7 +172,7 @@ function ShowPage({ t, season }: { t: Title; season?: number }) {
   return (
     <main className="page">
       <BackButton />
-      <section className="title-hero show" data-title={t.id}>
+      <section className="title-hero show">
         <Img src={t.backdrop} className="hero-art" />
         <div className="title-body">
           {t.logo ? <Img src={t.logo} className="hero-logo" alt={t.name} /> : <h1 className={`hero-title${t.name.length > 18 ? ' long' : ''}`}>{t.name}</h1>}
@@ -183,7 +183,7 @@ function ShowPage({ t, season }: { t: Title; season?: number }) {
           {m?.overview && <p className="overview">{m.overview}</p>}
           <div className="actions">
             {resume && (
-              <button className="btn primary" onClick={(e) => {
+              <button className="btn primary" data-file={resume.fileId} data-title={t.id} onClick={(e) => {
                   // fly from that episode's card when it's on screen, otherwise grow out of the button
                   const card = document.querySelector(`.ep[data-file="${resume.fileId}"]`)
                   play(resume.fileId, card && onScreen(card.getBoundingClientRect()) ? card : e.currentTarget)

@@ -150,6 +150,10 @@ export interface Settings {
   ffmpegDir: string
   subStyle: SubStyle
   sortAuto: boolean
+  /** title id -> when it was taken out of Continue watching (watching again brings it back) */
+  hiddenResume: Record<number, number>
+  /** titles taken out of Recently added */
+  hiddenRecent: number[]
 }
 
 export type QueueStatus = 'waiting' | 'working' | 'attention' | 'done' | 'downloading'
